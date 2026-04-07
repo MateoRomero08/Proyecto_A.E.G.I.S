@@ -1,0 +1,44 @@
+# ===============================
+# Entorno y secretos (CRITICO)
+# ===============================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ===============================
+# Bases de datos locales
+# ===============================
+db.sqlite3
+*.sqlite3
+dump.rdb
+
+# ===============================
+# Django / Python
+# ===============================
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+staticfiles/
+media/
+celerybeat-schedule
+
+# ===============================
+# React / Node
+# ===============================
+node_modules/
+dist/
+build/
+.eslintcache
+npm-debug.log*
+yarn-error.log*
+
+# ===============================
+# Sistema Operativo
+# ===============================
+.DS_Store
+Thumbs.db

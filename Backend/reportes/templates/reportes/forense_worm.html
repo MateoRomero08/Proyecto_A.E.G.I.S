@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Reporte Forense WORM</title>
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; color: #111827; font-size: 11px; }
+    .header { border-bottom: 2px solid #7f1d1d; padding-bottom: 10px; margin-bottom: 12px; }
+    .title { font-size: 20px; font-weight: bold; color: #7f1d1d; }
+    .subtitle { margin-top: 4px; color: #4b5563; font-size: 10px; }
+    .kpi { margin-top: 8px; margin-bottom: 12px; font-size: 11px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #111827; color: #ffffff; padding: 6px; text-align: left; font-size: 9px; }
+    td { border: 1px solid #d1d5db; padding: 5px; font-size: 9px; }
+    .footer { margin-top: 12px; font-size: 9px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">Reporte Forense AEGIS (WORM)</div>
+    <div class="subtitle">Extracto global de transacciones criticas de seguridad | Fecha de corte: {{ fecha_corte|date:"d/m/Y H:i" }}</div>
+  </div>
+
+  <div class="kpi">Registros exportados: <strong>{{ total_eventos }}</strong> (limite solicitado: {{ limite }})</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 16%;">Fecha</th>
+        <th style="width: 18%;">Accion</th>
+        <th style="width: 16%;">Actor</th>
+        <th style="width: 15%;">Usuario Objetivo</th>
+        <th style="width: 15%;">Empresa</th>
+        <th style="width: 10%;">IP</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for fila in filas %}
+      <tr>
+        <td>{{ fila.fecha_evento|date:"d/m/Y H:i:s" }}</td>
+        <td>{{ fila.accion }}</td>
+        <td>{{ fila.actor }}</td>
+        <td>{{ fila.usuario_objetivo }}</td>
+        <td>{{ fila.empresa }}</td>
+        <td>{{ fila.ip_origen }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6">No existen eventos disponibles en la bitacora para el rango solicitado.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Este documento es solo de lectura y referencia forense. Fuente: bitacora inmutable WORM de AEGIS.
+  </div>
+</body>
+</html>

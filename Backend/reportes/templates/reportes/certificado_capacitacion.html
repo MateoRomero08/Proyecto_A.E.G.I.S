@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Certificado de Capacitacion</title>
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; margin: 0; padding: 0; color: #111827; }
+    .frame {
+      border: 8px solid #111827;
+      margin: 18px;
+      padding: 26px;
+      text-align: center;
+      background: #fffdf5;
+    }
+    .brand { font-size: 26px; font-weight: bold; letter-spacing: 2px; color: #111827; }
+    .headline { margin-top: 16px; font-size: 32px; font-weight: bold; color: #92400e; }
+    .line { margin-top: 18px; font-size: 14px; line-height: 1.7; }
+    .name { margin-top: 20px; font-size: 30px; font-weight: bold; color: #111827; }
+    .course { margin-top: 16px; font-size: 18px; font-weight: bold; color: #1d4ed8; }
+    .date { margin-top: 16px; font-size: 13px; color: #374151; }
+    .signature { margin-top: 40px; font-size: 12px; color: #4b5563; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <div class="brand">AEGIS</div>
+    <div class="headline">Certificado de Capacitacion</div>
+
+    <div class="line">
+      Aegis certifica que
+    </div>
+    <div class="name">{{ nombre_usuario }}</div>
+
+    <div class="line">
+      de la empresa <strong>{{ empresa_nombre }}</strong>
+      ha completado satisfactoriamente el curso
+    </div>
+    <div class="course">{{ curso_titulo }}</div>
+
+    <div class="date">
+      Fecha de finalizacion: <strong>{{ fecha_certificado|date:"d/m/Y" }}</strong><br/>
+      Fecha de emision: {{ fecha_emision|date:"d/m/Y H:i" }}
+    </div>
+
+    <div class="signature">
+      Plataforma AEGIS GRC · Evidencia de formacion y cumplimiento continuo
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Reporte Ejecutivo ISO 27001</title>
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; color: #1f2937; font-size: 12px; }
+    .header { border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 16px; }
+    .brand { font-size: 20px; font-weight: bold; color: #111827; }
+    .subtitle { font-size: 11px; color: #4b5563; margin-top: 4px; }
+    .kpi-table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 18px; }
+    .kpi-cell { width: 25%; border: 1px solid #d1d5db; padding: 10px; background: #f9fafb; }
+    .kpi-label { font-size: 10px; text-transform: uppercase; color: #6b7280; }
+    .kpi-value { font-size: 20px; font-weight: bold; margin-top: 4px; color: #111827; }
+    .section-title { font-size: 14px; font-weight: bold; margin: 14px 0 8px; color: #111827; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #111827; color: #ffffff; font-size: 10px; text-align: left; padding: 8px; }
+    td { border: 1px solid #d1d5db; padding: 7px; font-size: 11px; }
+    .footer { margin-top: 18px; font-size: 10px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">AEGIS · Reporte Ejecutivo ISO 27001</div>
+    <div class="subtitle">
+      Empresa: <strong>{{ empresa.nombre }}</strong> | Fecha de corte: {{ fecha_corte|date:"d/m/Y H:i" }}
+    </div>
+  </div>
+
+  <table class="kpi-table">
+    <tr>
+      <td class="kpi-cell">
+        <div class="kpi-label">Cumplimiento</div>
+        <div class="kpi-value">{{ porcentaje_cumplimiento }}%</div>
+      </td>
+      <td class="kpi-cell">
+        <div class="kpi-label">Controles Implementados</div>
+        <div class="kpi-value">{{ controles_implementados }}</div>
+      </td>
+      <td class="kpi-cell">
+        <div class="kpi-label">Controles Pendientes</div>
+        <div class="kpi-value">{{ controles_pendientes_total }}</div>
+      </td>
+      <td class="kpi-cell">
+        <div class="kpi-label">Total de Controles</div>
+        <div class="kpi-value">{{ total_controles }}</div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="section-title">Tabla de Controles Pendientes</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 20%;">Identificador</th>
+        <th style="width: 25%;">Dominio</th>
+        <th style="width: 55%;">Control</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for control in controles_pendientes %}
+      <tr>
+        <td>{{ control.identificador }}</td>
+        <td>{{ control.dominio }}</td>
+        <td>{{ control.nombre }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="3">No existen controles pendientes para esta fecha de corte.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Documento generado por AEGIS SaaS GRC. Uso sugerido: comite ejecutivo y seguimiento de mejora continua.
+  </div>
+</body>
+</html>
