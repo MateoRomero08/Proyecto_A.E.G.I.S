@@ -1,4 +1,8 @@
+import os
+
+from django.conf import settings
 from rest_framework import viewsets, status
+from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError, PermissionDenied
@@ -60,9 +64,13 @@ class EvaluacionControlViewSet(viewsets.ModelViewSet):
     queryset = EvaluacionControl.objects.all().select_related('empresa', 'control', 'usuario')
     serializer_class = EvaluacionControlSerializer
     permission_classes = [IsAuthenticated, IsApprovedUser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filterset_fields = ['empresa', 'control', 'estado']
     search_fields = ['control__nombre', 'justificacion']
     ordering_fields = ['id', 'estado']
+
+    def _asegurar_media_root(self):
+        os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
 
     def _validar_empresa_usuario(self, empresa):
         user = self.request.user
@@ -143,7 +151,7 @@ class EvaluacionControlViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         validated_data = dict(serializer.validated_data)
-        evidencia_file = validated_data.pop('evidencia', None)
+        evidencia_file = request.FILES.get('evidencia') or validated_data.pop('evidencia', None)
 
         empresa = validated_data['empresa']
         control = validated_data['control']
@@ -170,6 +178,7 @@ class EvaluacionControlViewSet(viewsets.ModelViewSet):
 
             # Si NO_APLICA, no conservar evidencia. Si IMPLEMENTADO y llega archivo, actualizar/crear.
             if evaluacion.estado != 'NO_APLICA' and evidencia_file:
+                self._asegurar_media_root()
                 evidencia_existente = evaluacion.evidencias.first()
                 if evidencia_existente:
                     evidencia_existente.archivo = evidencia_file
@@ -208,7 +217,7 @@ class EvaluacionControlViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         validated_data = dict(serializer.validated_data)
-        evidencia_file = validated_data.pop('evidencia', None)
+        evidencia_file = request.FILES.get('evidencia') or validated_data.pop('evidencia', None)
 
         with transaction.atomic():
             if instance.empresa_id != request.user.empresa_id:
@@ -226,6 +235,7 @@ class EvaluacionControlViewSet(viewsets.ModelViewSet):
             instance.save()
 
             if instance.estado != 'NO_APLICA' and evidencia_file:
+                self._asegurar_media_root()
                 evidencia_existente = instance.evidencias.first()
                 if evidencia_existente:
                     evidencia_existente.archivo = evidencia_file
@@ -370,9 +380,21 @@ class EvaluacionControlViewSet(viewsets.ModelViewSet):
 class EvidenciaViewSet(viewsets.ModelViewSet):
     serializer_class = EvidenciaSerializer
     permission_classes = [IsAuthenticated, IsApprovedUser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filterset_fields = ['evaluacion']
     ordering_fields = ['fecha_subida']
     ordering = ['-fecha_subida']
+
+    def _asegurar_media_root(self):
+        os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
+
+    def perform_create(self, serializer):
+        self._asegurar_media_root()
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._asegurar_media_root()
+        serializer.save()
 
     def get_queryset(self):
         user = self.request.user
