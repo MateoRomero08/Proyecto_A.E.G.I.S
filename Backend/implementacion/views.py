@@ -151,6 +151,7 @@ class EvaluacionControlViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         validated_data = dict(serializer.validated_data)
+        os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
         evidencia_file = request.FILES.get('evidencia') or validated_data.pop('evidencia', None)
 
         empresa = validated_data['empresa']
@@ -217,6 +218,7 @@ class EvaluacionControlViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         validated_data = dict(serializer.validated_data)
+        os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
         evidencia_file = request.FILES.get('evidencia') or validated_data.pop('evidencia', None)
 
         with transaction.atomic():
