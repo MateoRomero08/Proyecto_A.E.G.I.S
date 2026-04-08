@@ -29,7 +29,12 @@ from .serializers import (
     BitacoraSeguridadUsuarioSerializer,
     NotificacionSerializer,
 )
-from .permissions import IsApprovedUser, IsSuperAdminOnly
+from .permissions import (
+    IsApprovedUser,
+    IsSuperAdminOrAdminSistema,
+    es_acceso_global,
+    es_admin_sistema,
+)
 
 User = get_user_model()
 
@@ -129,11 +134,11 @@ class BitacoraSeguridadPagination(PageNumberPagination):
 class BitacoraSeguridadUsuarioListView(generics.ListAPIView):
     """
     Endpoint global de bitácora forense (WORM).
-    Solo superusuarios pueden consultar.
+    Solo perfiles globales (SuperAdmin o ADMIN_SISTEMA) pueden consultar.
     """
 
     serializer_class = BitacoraSeguridadUsuarioSerializer
-    permission_classes = [permissions.IsAuthenticated, IsSuperAdminOnly]
+    permission_classes = [permissions.IsAuthenticated, IsSuperAdminOrAdminSistema]
     pagination_class = BitacoraSeguridadPagination
     queryset = (
         BitacoraSeguridadUsuario.objects
@@ -242,9 +247,6 @@ class DashboardStatsView(APIView):
 
     permission_classes = [permissions.IsAuthenticated, IsApprovedUser]
 
-    ROLES_ISO = {'LIDER_EQUIPO', 'IMPLEMENTADOR', 'AUDITOR', 'AUDITOR_INTERNO'}
-    ROLES_CAPACITACION = {'EMPLEADO', 'CAPACITADOR'}
-
     def _cursos_visibles_queryset(self, user):
         if not user.empresa_id:
             return CursoCapacitacion.objects.none()
@@ -298,10 +300,11 @@ class DashboardStatsView(APIView):
     def get(self, request):
         user = request.user
 
-        if user.is_superuser:
+        if es_acceso_global(user):
             return Response(
                 {
                     'scope': 'SUPERADMIN',
+                    'es_admin_sistema': es_admin_sistema(user),
                     'total_empresas': Empresa.objects.count(),
                     'total_usuarios': User.objects.count(),
                     'total_cursos_globales': CursoCapacitacion.objects.filter(
@@ -315,38 +318,7 @@ class DashboardStatsView(APIView):
         cursos_visibles_qs = self._cursos_visibles_queryset(user)
         metricas_capacitacion = self._metricas_capacitacion(user, cursos_visibles_qs)
 
-        if user.rol in self.ROLES_ISO:
-            total_controles = ControlISO.objects.count()
-            evaluaciones_empresa_qs = EvaluacionControl.objects.filter(empresa_id=user.empresa_id)
-
-            controles_evaluados = evaluaciones_empresa_qs.values('control_id').distinct().count()
-            controles_implementados = evaluaciones_empresa_qs.filter(estado='IMPLEMENTADO').count()
-            controles_en_proceso = evaluaciones_empresa_qs.filter(estado='EN_PROCESO').count()
-            controles_no_aplica = evaluaciones_empresa_qs.filter(estado='NO_APLICA').count()
-
-            controles_pendientes = max(total_controles - controles_evaluados, 0)
-            total_controles_aplicables = max(total_controles - controles_no_aplica, 0)
-            porcentaje_cumplimiento_iso = (
-                round((controles_implementados / total_controles_aplicables) * 100, 2)
-                if total_controles_aplicables
-                else 0
-            )
-
-            return Response(
-                {
-                    'scope': 'EMPRESA_ISO',
-                    'porcentaje_cumplimiento_iso': porcentaje_cumplimiento_iso,
-                    'controles_pendientes': controles_pendientes,
-                    'cursos_activos': cursos_visibles_qs.count(),
-                    'controles_implementados': controles_implementados,
-                    'controles_en_proceso': controles_en_proceso,
-                    'total_controles': total_controles,
-                    **metricas_capacitacion,
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        if user.rol in self.ROLES_CAPACITACION:
+        if not user.empresa_id:
             return Response(
                 {
                     'scope': 'CAPACITACION',
@@ -355,9 +327,31 @@ class DashboardStatsView(APIView):
                 status=status.HTTP_200_OK,
             )
 
+        total_controles = ControlISO.objects.count()
+        evaluaciones_empresa_qs = EvaluacionControl.objects.filter(empresa_id=user.empresa_id)
+
+        controles_evaluados = evaluaciones_empresa_qs.values('control_id').distinct().count()
+        controles_implementados = evaluaciones_empresa_qs.filter(estado='IMPLEMENTADO').count()
+        controles_en_proceso = evaluaciones_empresa_qs.filter(estado='EN_PROCESO').count()
+        controles_no_aplica = evaluaciones_empresa_qs.filter(estado='NO_APLICA').count()
+
+        controles_pendientes = max(total_controles - controles_evaluados, 0)
+        total_controles_aplicables = max(total_controles - controles_no_aplica, 0)
+        porcentaje_cumplimiento_iso = (
+            round((controles_implementados / total_controles_aplicables) * 100, 2)
+            if total_controles_aplicables
+            else 0
+        )
+
         return Response(
             {
-                'scope': 'CAPACITACION',
+                'scope': 'EMPRESA_ISO',
+                'porcentaje_cumplimiento_iso': porcentaje_cumplimiento_iso,
+                'controles_pendientes': controles_pendientes,
+                'cursos_activos': cursos_visibles_qs.count(),
+                'controles_implementados': controles_implementados,
+                'controles_en_proceso': controles_en_proceso,
+                'total_controles': total_controles,
                 **metricas_capacitacion,
             },
             status=status.HTTP_200_OK,
@@ -367,15 +361,24 @@ class DashboardStatsView(APIView):
 class GlobalUserViewSet(viewsets.ModelViewSet):
     """
     Centro de comando global de usuarios para infraestructura.
-    Exclusivo de superusuarios.
+    - SuperAdmin: control total (create/update/inactivate/reset).
+    - ADMIN_SISTEMA: lectura global + aprobación/rechazo global.
+    - Resto de roles: visibilidad acotada a su empresa.
     """
     serializer_class = GlobalUserAdminSerializer
-    permission_classes = [permissions.IsAuthenticated, IsSuperAdminOnly]
+    permission_classes = [permissions.IsAuthenticated, IsApprovedUser]
     pagination_class = GlobalUsersPagination
     queryset = User.objects.all().select_related('empresa').order_by('-date_joined')
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = self.request.user
+
+        if not es_acceso_global(user):
+            if not user.empresa_id:
+                return User.objects.none()
+            queryset = queryset.filter(empresa_id=user.empresa_id)
+
         search = self.request.query_params.get('search', '').strip()
 
         if search:
@@ -400,6 +403,9 @@ class GlobalUserViewSet(viewsets.ModelViewSet):
         return queryset
 
     def create(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            raise PermissionDenied('Solo SuperAdmin puede crear usuarios globales.')
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
@@ -431,6 +437,20 @@ class GlobalUserViewSet(viewsets.ModelViewSet):
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
+        if not es_acceso_global(request.user):
+            raise PermissionDenied('No tienes permisos para modificar usuarios globales.')
+
+        if es_admin_sistema(request.user):
+            campos_permitidos = {'is_approved', 'is_active', 'es_administrador_empresa'}
+            campos_enviados = set(request.data.keys())
+            campos_invalidos = campos_enviados - campos_permitidos
+
+            if campos_invalidos:
+                raise PermissionDenied(
+                    'ADMIN_SISTEMA solo puede aprobar/rechazar usuarios '
+                    f'(campos permitidos: {", ".join(sorted(campos_permitidos))}).'
+                )
+
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
 
@@ -483,6 +503,9 @@ class GlobalUserViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(usuario_actualizado).data, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            raise PermissionDenied('Solo SuperAdmin puede inactivar usuarios globales.')
+
         instance = self.get_object()
 
         if instance.id == request.user.id:
@@ -524,6 +547,9 @@ class GlobalUserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='stats')
     def stats(self, request):
+        if not es_acceso_global(request.user):
+            raise PermissionDenied('No tienes permisos para consultar estadísticas globales de usuarios.')
+
         data = {
             'total_users': User.objects.count(),
             'active_users': User.objects.filter(is_active=True).count(),
@@ -534,7 +560,13 @@ class GlobalUserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='empresas')
     def empresas(self, request):
-        empresas = Empresa.objects.all().order_by('nombre')
+        if es_acceso_global(request.user):
+            empresas = Empresa.objects.all().order_by('nombre')
+        elif request.user.empresa_id:
+            empresas = Empresa.objects.filter(id=request.user.empresa_id).order_by('nombre')
+        else:
+            empresas = Empresa.objects.none()
+
         data = [
             {
                 'id': empresa.id,
@@ -551,6 +583,9 @@ class GlobalUserViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='forzar-reset-password')
     def forzar_reset_password(self, request, pk=None):
+        if not request.user.is_superuser:
+            raise PermissionDenied('Solo SuperAdmin puede forzar reseteo de contraseña global.')
+
         user = self.get_object()
 
         if user.id == request.user.id:
@@ -758,8 +793,8 @@ class ListarUsuariosPorEmpresaView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         
-        # Si es superuser, puede ver todos
-        if user.is_superuser:
+        # SuperAdmin y ADMIN_SISTEMA pueden ver todos.
+        if es_acceso_global(user):
             return User.objects.all()
         
         # Si tiene empresa, mostrar solo usuarios de su empresa
@@ -783,7 +818,7 @@ class GestionEquipoView(APIView):
         search = request.query_params.get('search', '').strip()
         rol = request.query_params.get('rol', '').strip()
 
-        if user.is_superuser:
+        if es_acceso_global(user):
             queryset = User.objects.all().select_related('empresa').order_by('empresa__nombre', 'rol', 'username')
 
             if empresa_id.isdigit():
@@ -834,7 +869,7 @@ class AprobarMiembroEquipoView(APIView):
     def post(self, request, user_id):
         admin_user = request.user
 
-        if not admin_user.is_superuser:
+        if not es_acceso_global(admin_user):
             if not _es_lider_equipo(admin_user):
                 raise PermissionDenied('Solo el líder de equipo puede aprobar usuarios.')
             if not admin_user.empresa_id:
@@ -842,7 +877,7 @@ class AprobarMiembroEquipoView(APIView):
 
         objetivo = get_object_or_404(User, id=user_id)
 
-        if not admin_user.is_superuser and objetivo.empresa_id != admin_user.empresa_id:
+        if not es_acceso_global(admin_user) and objetivo.empresa_id != admin_user.empresa_id:
             raise PermissionDenied('No puedes aprobar usuarios de otra empresa.')
 
         with transaction.atomic():
@@ -879,7 +914,7 @@ class RechazarMiembroEquipoView(APIView):
     def post(self, request, user_id):
         admin_user = request.user
 
-        if not admin_user.is_superuser:
+        if not es_acceso_global(admin_user):
             if not _es_lider_equipo(admin_user):
                 raise PermissionDenied('Solo el líder de equipo puede rechazar usuarios.')
             if not admin_user.empresa_id:
@@ -893,7 +928,7 @@ class RechazarMiembroEquipoView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if not admin_user.is_superuser and objetivo.empresa_id != admin_user.empresa_id:
+        if not es_acceso_global(admin_user) and objetivo.empresa_id != admin_user.empresa_id:
             raise PermissionDenied('No puedes rechazar usuarios de otra empresa.')
 
         with transaction.atomic():

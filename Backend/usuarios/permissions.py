@@ -1,6 +1,35 @@
 from rest_framework import permissions
 
 
+def es_admin_sistema(user):
+    """Determina si el usuario pertenece al grupo ADMIN_SISTEMA."""
+    if not (user and user.is_authenticated and not user.is_superuser):
+        return False
+
+    if getattr(user, 'rol', None) == 'ADMIN_SISTEMA':
+        return True
+
+    return bool(
+        user.groups.filter(name='ADMIN_SISTEMA').exists()
+        or user.has_perm('usuarios.manage_global_users')
+    )
+
+
+def es_acceso_global(user):
+    """Acceso global para SuperAdmin o ADMIN_SISTEMA."""
+    return bool(user and user.is_authenticated and (user.is_superuser or es_admin_sistema(user)))
+
+
+class IsSuperAdminOrAdminSistema(permissions.BasePermission):
+    """
+    Permiso global para endpoints compartidos entre SuperAdmin y ADMIN_SISTEMA.
+    """
+    message = 'Acceso restringido: requiere privilegios globales (SuperAdmin o ADMIN_SISTEMA).'
+
+    def has_permission(self, request, view):
+        return es_acceso_global(request.user)
+
+
 class EsImplementador(permissions.BasePermission):
     """
     Permiso personalizado que solo permite acceso a usuarios con rol IMPLEMENTADOR.

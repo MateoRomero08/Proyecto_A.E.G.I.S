@@ -111,7 +111,12 @@ class CursoCapacitacionSerializer(serializers.ModelSerializer):
             'fecha_completado': None,
         }
 
-        if not user or not user.is_authenticated or user.is_superuser:
+        if (
+            not user
+            or not user.is_authenticated
+            or user.is_superuser
+            or getattr(user, 'rol', None) == 'ADMIN_SISTEMA'
+        ):
             return progreso_base
 
         progreso_obj = None

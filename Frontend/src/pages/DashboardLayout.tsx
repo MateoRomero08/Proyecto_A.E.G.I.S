@@ -13,9 +13,14 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import { cerrarSesionRemota, esSuperusuario, obtenerRolUsuario, obtenerUsuario, PERMISOS_FRONTEND } from "../utils/auth";
+import {
+  cerrarSesionRemota,
+  esAdminSistema,
+  esSuperusuario,
+  obtenerRolUsuario,
+  obtenerUsuario,
+} from "../utils/auth";
 import { RoleBadge, obtenerClasesAvatarRol } from "../components/RoleBadge";
-import { usePermissions } from "../hooks/usePermissions";
 
 const obtenerInicialesUsuario = (nombre?: string, email?: string, username?: string): string => {
   const fuente = (nombre && nombre.trim())
@@ -41,9 +46,9 @@ export function DashboardLayout() {
   const location = useLocation();
   const [sidebarAbiertoMovil, setSidebarAbiertoMovil] = useState(false);
   const esSuperAdmin = esSuperusuario();
+  const esAdminSistemaGlobal = esAdminSistema();
   const rol = obtenerRolUsuario();
   const usuarioActual = obtenerUsuario();
-  const { hasPermission } = usePermissions(usuarioActual);
 
   const nombreCompleto = `${String(usuarioActual?.first_name || "")} ${String(usuarioActual?.last_name || "")}`.trim();
   const nombrePerfil =
@@ -57,26 +62,66 @@ export function DashboardLayout() {
   const inicialesPerfil = obtenerInicialesUsuario(nombreCompleto || nombrePerfil, usuarioActual?.email, usuarioActual?.username);
 
   const menuItems = (() => {
-    const dashboardItem = { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permission: PERMISOS_FRONTEND.VER_DASHBOARD };
-
     if (esSuperAdmin) {
       return [
-        dashboardItem,
-        { path: "/dashboard/usuarios", icon: Users, label: "Gestión de Usuarios", permission: PERMISOS_FRONTEND.VER_USUARIOS_GLOBALES },
-        { path: "/dashboard/equipo", icon: UserCheck, label: "Gestión de Equipos (Global)", permission: PERMISOS_FRONTEND.VER_EQUIPO },
-        { path: "/dashboard/reportes", icon: FileText, label: "Reportes (Global)", permission: PERMISOS_FRONTEND.VER_REPORTES },
-        { path: "/dashboard/capacitacion", icon: GraduationCap, label: "Capacitación (Global)", permission: PERMISOS_FRONTEND.VER_CAPACITACION },
-      ].filter((item) => hasPermission(item.permission));
+        { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/dashboard/usuarios", icon: Users, label: "G.U ADMIN" },
+        { path: "/dashboard/equipo", icon: UserCheck, label: "Gestión Equipo GLOBAL" },
+        { path: "/dashboard/usuarios?panel=bitacora", icon: Shield, label: "Bitácora Forense" },
+        { path: "/dashboard/reportes", icon: FileText, label: "Reportes Global" },
+        { path: "/dashboard/capacitacion", icon: GraduationCap, label: "Capacitación" },
+      ];
+    }
+
+    if (esAdminSistemaGlobal) {
+      return [
+        { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/dashboard/equipo", icon: UserCheck, label: "Gestión Equipo GLOBAL" },
+        { path: "/dashboard/reportes", icon: FileText, label: "Reportes Global" },
+        { path: "/dashboard/usuarios?panel=bitacora", icon: Shield, label: "Bitácora Forense" },
+        { path: "/dashboard/capacitacion", icon: GraduationCap, label: "Capacitación" },
+      ];
+    }
+
+    if (rol === "LIDER_EQUIPO") {
+      return [
+        { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/dashboard/equipo", icon: UserCheck, label: "Gestión Equipo" },
+        { path: "/dashboard/reportes", icon: FileText, label: "Reportes" },
+      ];
+    }
+
+    if (rol === "IMPLEMENTADOR") {
+      return [
+        { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/dashboard/implementacion", icon: FileCheck, label: "Implementación ISO" },
+      ];
+    }
+
+    if (rol === "AUDITOR") {
+      return [
+        { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/dashboard/auditorias", icon: ClipboardList, label: "Auditoría" },
+      ];
+    }
+
+    if (rol === "CAPACITADOR") {
+      return [
+        { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/dashboard/capacitacion", icon: GraduationCap, label: "Capacitación" },
+      ];
+    }
+
+    if (rol === "EMPLEADO") {
+      return [
+        { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/dashboard/capacitacion", icon: GraduationCap, label: "Capacitación" },
+      ];
     }
 
     return [
-      dashboardItem,
-      { path: "/dashboard/equipo", icon: UserCheck, label: "Gestión de Equipo (Local)", permission: PERMISOS_FRONTEND.VER_EQUIPO },
-      { path: "/dashboard/reportes", icon: FileText, label: "Reportes", permission: PERMISOS_FRONTEND.VER_REPORTES },
-      { path: "/dashboard/implementacion", icon: FileCheck, label: "Implementación ISO 27001", permission: PERMISOS_FRONTEND.VER_IMPLEMENTACION },
-      { path: "/dashboard/auditorias", icon: ClipboardList, label: "Auditoría", permission: PERMISOS_FRONTEND.VER_AUDITORIA },
-      { path: "/dashboard/capacitacion", icon: GraduationCap, label: "Capacitación", permission: PERMISOS_FRONTEND.VER_CAPACITACION },
-    ].filter((item) => hasPermission(item.permission));
+      { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    ];
   })();
 
   const handleLogout = async () => {
@@ -145,9 +190,10 @@ export function DashboardLayout() {
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           {menuItems.map((item) => {
             const Icon = item.icon;
+            const itemPath = item.path.split("?")[0];
             const isActive =
-              location.pathname === item.path ||
-              (item.path === "/dashboard/auditorias" &&
+              location.pathname === itemPath ||
+              (itemPath === "/dashboard/auditorias" &&
                 location.pathname.startsWith("/dashboard/auditoria/proceso/"));
             
             return (

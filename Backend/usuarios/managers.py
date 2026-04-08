@@ -29,6 +29,7 @@ class UsuarioCustomManager(BaseUserManager):
         extra_fields.setdefault('is_active', True)
         extra_fields.setdefault('is_approved', True)
         extra_fields.setdefault('es_administrador_empresa', True)
+        extra_fields.setdefault('empresa', None)
         
         if extra_fields.get('is_staff') is not True:
             raise ValueError('El superusuario debe tener is_staff=True.')

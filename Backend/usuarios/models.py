@@ -16,6 +16,7 @@ class UsuarioCustom(AbstractUser):
     ROL_AUDITOR = 'AUDITOR'
     ROL_LIDER_EQUIPO = 'LIDER_EQUIPO'
     ROL_CAPACITADOR = 'CAPACITADOR'
+    ROL_ADMIN_SISTEMA = 'ADMIN_SISTEMA'
 
     # Compatibilidad temporal para datos históricos previos al refactor.
     ROL_AUDITOR_LEGACY = 'AUDITOR_INTERNO'
@@ -26,6 +27,7 @@ class UsuarioCustom(AbstractUser):
         (ROL_AUDITOR, 'Auditor'),
         (ROL_LIDER_EQUIPO, 'Líder de Equipo'),
         (ROL_CAPACITADOR, 'Capacitador'),
+        (ROL_ADMIN_SISTEMA, 'Administrador del Sistema'),
     ]
 
     email = models.EmailField(
@@ -93,8 +95,14 @@ class UsuarioCustom(AbstractUser):
             self.rol = self.ROL_AUDITOR
 
         if self.is_superuser:
+            self.empresa = None
             self.is_approved = True
             self.es_administrador_empresa = True
+        elif self.rol == self.ROL_ADMIN_SISTEMA:
+            # Los perfiles globales no deben quedar acoplados a un tenant.
+            self.empresa = None
+            self.is_approved = True
+            self.es_administrador_empresa = False
         else:
             # Renombrado funcional: el liderazgo de equipo se modela como rol explícito.
             if self.es_administrador_empresa and self.rol != self.ROL_LIDER_EQUIPO:
@@ -124,6 +132,10 @@ class UsuarioCustom(AbstractUser):
     def es_capacitador(self):
         """Verifica si el usuario está orientado al módulo de capacitación."""
         return self.rol == self.ROL_CAPACITADOR
+
+    def es_admin_sistema(self):
+        """Verifica si el usuario es administrador de sistema global."""
+        return self.rol == self.ROL_ADMIN_SISTEMA
     
     def tiene_empresa(self):
         """Verifica si el usuario está asociado a una empresa"""

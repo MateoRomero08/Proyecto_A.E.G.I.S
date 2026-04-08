@@ -286,7 +286,7 @@ class DashboardStatsViewTestCase(TestCase):
 
 				esperado = expectativas[usuario.username]
 				self.assertEqual(response.status_code, status.HTTP_200_OK)
-				self.assertEqual(response.data['scope'], 'CAPACITACION')
+				self.assertEqual(response.data['scope'], 'EMPRESA_ISO')
 				self.assertEqual(response.data['mis_cursos_pendientes'], esperado['pendientes'])
 				self.assertEqual(response.data['mis_modulos_completados'], esperado['modulos'])
 
@@ -315,6 +315,14 @@ class PermisosPayloadUsuarioTestCase(TestCase):
 			es_administrador_empresa=True,
 		)
 
+		self.admin_sistema = User.objects.create_user(
+			username='admin.sistema',
+			email='admin.sistema@aegis.com',
+			password='Password123!',
+			rol='ADMIN_SISTEMA',
+			empresa=self.empresa,
+		)
+
 	def test_login_devuelve_permisos_en_payload_usuario(self):
 		response = self.client.post(
 			'/api/usuarios/login/',
@@ -339,6 +347,20 @@ class PermisosPayloadUsuarioTestCase(TestCase):
 		self.assertIn('permisos', response.data)
 		self.assertIn('frontend.view_dashboard', response.data['permisos'])
 		self.assertIn('frontend.view_equipo', response.data['permisos'])
+		self.assertIn('frontend.view_reportes', response.data['permisos'])
+
+	def test_admin_sistema_queda_global_aprobado_y_con_capacitacion(self):
+		self.admin_sistema.refresh_from_db()
+		self.assertIsNone(self.admin_sistema.empresa_id)
+		self.assertTrue(self.admin_sistema.is_approved)
+
+		self.client.force_authenticate(user=self.admin_sistema)
+		response = self.client.get('/api/usuarios/perfil/')
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertTrue(response.data['is_approved'])
+		self.assertIsNone(response.data['empresa'])
+		self.assertIn('frontend.view_capacitacion', response.data['permisos'])
 		self.assertIn('frontend.view_reportes', response.data['permisos'])
 
 
@@ -367,7 +389,7 @@ class SeedGruposPermisosAegisCommandTestCase(TestCase):
 	def test_seed_crea_grupos_y_sincroniza_usuarios(self):
 		call_command('seed_grupos_permisos_aegis')
 
-		for rol in ['EMPLEADO', 'IMPLEMENTADOR', 'AUDITOR', 'LIDER_EQUIPO', 'CAPACITADOR']:
+		for rol in ['ADMIN_SISTEMA', 'EMPLEADO', 'IMPLEMENTADOR', 'AUDITOR', 'LIDER_EQUIPO', 'CAPACITADOR']:
 			self.assertTrue(Group.objects.filter(name=rol).exists())
 
 		grupo_implementador = Group.objects.get(name='IMPLEMENTADOR')

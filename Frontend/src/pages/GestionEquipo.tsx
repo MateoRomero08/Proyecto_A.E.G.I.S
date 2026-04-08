@@ -10,7 +10,7 @@ interface UsuarioEquipo {
   email: string;
   first_name: string;
   last_name: string;
-  rol: "EMPLEADO" | "IMPLEMENTADOR" | "AUDITOR" | "LIDER_EQUIPO" | "CAPACITADOR";
+  rol: "EMPLEADO" | "IMPLEMENTADOR" | "AUDITOR" | "LIDER_EQUIPO" | "CAPACITADOR" | "ADMIN_SISTEMA";
   rol_display: string;
   is_superuser?: boolean;
   is_active: boolean;
@@ -28,6 +28,9 @@ export function GestionEquipo() {
 
   const usuarioActual = obtenerUsuario();
   const liderEquipo = esAdministradorEmpresa();
+  const esAdminSistema = usuarioActual?.rol === "ADMIN_SISTEMA";
+  const esSuperAdmin = Boolean(usuarioActual?.is_superuser);
+  const puedeVerGestionEquipo = liderEquipo || esAdminSistema || esSuperAdmin;
 
   const pendientes = useMemo(
     () => usuarios.filter((usuario) => !usuario.is_approved && usuario.is_active),
@@ -85,7 +88,7 @@ export function GestionEquipo() {
     }
   };
 
-  if (!liderEquipo && !usuarioActual?.is_superuser) {
+  if (!puedeVerGestionEquipo) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
         <h1 className="text-2xl font-bold text-yellow-900">Gestión de Equipo</h1>
@@ -102,7 +105,7 @@ export function GestionEquipo() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Gestión de Equipo</h1>
           <p className="text-gray-600 mt-1">
-            {usuarioActual?.is_superuser
+            {esSuperAdmin || esAdminSistema
               ? "Vista global: administra usuarios y aprobaciones de todas las empresas."
               : "Aprueba o rechaza usuarios pendientes de tu empresa."}
           </p>

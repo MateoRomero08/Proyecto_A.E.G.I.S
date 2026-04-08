@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -7,7 +7,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from usuarios.permissions import IsApprovedUser
+from usuarios.permissions import IsApprovedUser, es_acceso_global
 
 from .models import CursoCapacitacion, ModuloContenido, ProgresoUsuario
 from .serializers import (
@@ -49,15 +49,15 @@ class CursoCapacitacionViewSet(viewsets.ModelViewSet):
             Prefetch('modulos', queryset=modulos_activos_qs)
         )
 
-        if user.is_superuser:
-            return queryset.filter(creado_por_admin=True, empresa__isnull=True)
+        if es_acceso_global(user):
+            return queryset
 
         if not user.empresa_id:
             return CursoCapacitacion.objects.none()
 
         progreso_usuario_qs = ProgresoUsuario.objects.filter(usuario=user).prefetch_related('modulos_completados')
         return (
-            queryset.filter(Q(empresa=user.empresa) | Q(creado_por_admin=True))
+            queryset.filter(empresa=user.empresa)
             .distinct()
             .prefetch_related(Prefetch('progresos', queryset=progreso_usuario_qs, to_attr='progreso_usuario_actual'))
         )
@@ -66,6 +66,9 @@ class CursoCapacitacionViewSet(viewsets.ModelViewSet):
         if user.is_superuser:
             if accion == 'destroy':
                 return True
+            return bool(curso.creado_por_admin and curso.empresa_id is None)
+
+        if es_acceso_global(user):
             return bool(curso.creado_por_admin and curso.empresa_id is None)
 
         if not user.empresa_id:
@@ -90,7 +93,7 @@ class CursoCapacitacionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
 
-        if user.is_superuser:
+        if es_acceso_global(user):
             serializer.save(
                 empresa=None,
                 creado_por_admin=True,
@@ -136,13 +139,13 @@ class CursoCapacitacionViewSet(viewsets.ModelViewSet):
         user = request.user
         curso = self.get_object()
 
-        if user.is_superuser:
-            raise PermissionDenied('Los superusuarios no registran progreso academico.')
+        if es_acceso_global(user):
+            raise PermissionDenied('Los perfiles globales no registran progreso academico.')
 
         if not user.empresa_id:
             raise PermissionDenied('Tu usuario no tiene una empresa asociada.')
 
-        if not (curso.creado_por_admin or curso.empresa_id == user.empresa_id):
+        if curso.empresa_id != user.empresa_id:
             raise PermissionDenied('No puedes reportar progreso en cursos de otra empresa.')
 
         modulo_id = request.data.get('modulo_id')
@@ -191,15 +194,15 @@ class ModuloContenidoViewSet(viewsets.ModelViewSet):
 
         curso_id = self.request.query_params.get('curso')
 
-        if user.is_superuser:
+        if es_acceso_global(user):
             if curso_id:
                 queryset = queryset.filter(curso_id=curso_id)
-            return queryset.filter(curso__creado_por_admin=True, curso__empresa__isnull=True)
+            return queryset
 
         if not user.empresa_id:
             return ModuloContenido.objects.none()
 
-        queryset = queryset.filter(Q(curso__creado_por_admin=True) | Q(curso__empresa=user.empresa)).distinct()
+        queryset = queryset.filter(curso__empresa=user.empresa).distinct()
 
         if curso_id:
             queryset = queryset.filter(curso_id=curso_id)
@@ -213,6 +216,11 @@ class ModuloContenidoViewSet(viewsets.ModelViewSet):
             if curso.creado_por_admin and curso.empresa_id is None:
                 return
             raise PermissionDenied('SuperAdmin solo gestiona el catalogo global Aegis.')
+
+        if es_acceso_global(user):
+            if curso.creado_por_admin and curso.empresa_id is None:
+                return
+            raise PermissionDenied('Los perfiles globales solo gestionan el catalogo oficial Aegis.')
 
         if not user.empresa_id or curso.creado_por_admin or curso.empresa_id != user.empresa_id:
             raise PermissionDenied('No tienes permisos para gestionar modulos de este curso.')
@@ -270,10 +278,10 @@ class ProgresoUsuarioViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         queryset = ProgresoUsuario.objects.select_related('curso', 'curso__empresa').prefetch_related('modulos_completados')
 
-        if user.is_superuser:
+        if es_acceso_global(user):
             usuario_id = self.request.query_params.get('usuario')
             if usuario_id:
                 return queryset.filter(usuario_id=usuario_id)
-            return ProgresoUsuario.objects.none()
+            return queryset
 
         return queryset.filter(usuario=user)

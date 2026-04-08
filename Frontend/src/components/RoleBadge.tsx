@@ -1,6 +1,6 @@
 import { Badge } from "../app/components/ui/badge";
 
-type RolVisual = "EMPLEADO" | "IMPLEMENTADOR" | "AUDITOR" | "LIDER_EQUIPO" | "CAPACITADOR";
+type RolVisual = "EMPLEADO" | "IMPLEMENTADOR" | "AUDITOR" | "LIDER_EQUIPO" | "CAPACITADOR" | "ADMIN_SISTEMA";
 type RolVisualResuelto = RolVisual | "SUPERADMIN";
 
 type RoleBadgeProps = {
@@ -25,6 +25,7 @@ const normalizarRol = (rol?: string | null): RolVisual | null => {
     || rol === "AUDITOR"
     || rol === "LIDER_EQUIPO"
     || rol === "CAPACITADOR"
+    || rol === "ADMIN_SISTEMA"
   ) {
     return rol;
   }
@@ -40,6 +41,11 @@ const ROLE_STYLES: Record<
     label: "SuperAdmin",
     badgeClassName: "bg-black text-yellow-400 border border-yellow-500 font-bold",
     avatarClassName: "bg-black text-yellow-400 border border-yellow-500",
+  },
+  ADMIN_SISTEMA: {
+    label: "Admin Sistema",
+    badgeClassName: "bg-slate-200 text-slate-900 border-slate-400",
+    avatarClassName: "bg-slate-200 text-slate-900 border border-slate-400",
   },
   LIDER_EQUIPO: {
     label: "Lider de Equipo",
@@ -78,6 +84,10 @@ const resolverRolVisual = (
   }
 
   const rolNormalizado = normalizarRol(rol);
+
+  if (rolNormalizado === "ADMIN_SISTEMA") {
+    return "ADMIN_SISTEMA";
+  }
 
   if (isLeader || rolNormalizado === "LIDER_EQUIPO") {
     return "LIDER_EQUIPO";

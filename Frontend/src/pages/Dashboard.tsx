@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { BellRing, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "../utils/api";
-import { esSuperusuario, obtenerRolUsuario, obtenerUsuario } from "../utils/auth";
+import { esAdminSistema, esSuperusuario, obtenerRolUsuario, obtenerUsuario } from "../utils/auth";
 import { fetchDashboardStats, type DashboardStatsResponse } from "../utils/dashboardApi";
 import { WidgetAdminGlobal } from "./WidgetAdminGlobal";
 import { WidgetBienvenida } from "./WidgetBienvenida";
@@ -63,9 +63,11 @@ export function Dashboard() {
 
   const rolUsuario = obtenerRolUsuario();
   const esSuperAdmin = esSuperusuario();
-  const esAuditor = !esSuperAdmin && rolUsuario === "AUDITOR";
+  const esAdminGlobal = esAdminSistema();
+  const esPerfilGlobal = esSuperAdmin || esAdminGlobal;
+  const esAuditor = !esPerfilGlobal && rolUsuario === "AUDITOR";
   const nombreUsuario = (`${usuario?.first_name || ''} ${usuario?.last_name || ''}`).trim() || usuario?.username || "Usuario";
-  const rolVisible = esSuperAdmin ? "SUPERADMIN" : (rolUsuario || "USUARIO");
+  const rolVisible = esSuperAdmin ? "SUPERADMIN" : (esAdminGlobal ? "ADMIN_SISTEMA" : (rolUsuario || "USUARIO"));
   const empresaNombre = usuario?.empresa_info?.nombre || null;
   const totalPendientes = useMemo(() => notificaciones.filter((n) => !n.leida).length, [notificaciones]);
 
@@ -185,10 +187,11 @@ export function Dashboard() {
   };
 
   const widgets = useMemo(() => {
-    if (esSuperAdmin) {
+    if (esPerfilGlobal) {
       return [
         <WidgetAdminGlobal
           key="widget-admin-global"
+          modo={esSuperAdmin ? "SUPERADMIN" : "ADMIN_SISTEMA"}
           onNavigate={(path) => navigate(path)}
           stats={stats}
           isLoading={cargandoStats}
@@ -206,6 +209,14 @@ export function Dashboard() {
     ];
 
     if (rolUsuario === "EMPLEADO") {
+      baseWidgets.push(
+        <WidgetResumenISO
+          key="widget-resumen-iso"
+          rol="EMPLEADO"
+          stats={stats}
+          isLoading={cargandoStats}
+        />,
+      );
       baseWidgets.push(
         <WidgetProgresoCursos
           key="widget-progreso-cursos"
@@ -240,14 +251,6 @@ export function Dashboard() {
           onAbrirImplementacion={() => navigate('/dashboard/implementacion')}
         />,
       );
-      baseWidgets.push(
-        <WidgetProgresoCursos
-          key="widget-progreso-cursos"
-          stats={stats}
-          isLoading={cargandoStats}
-          onAbrirCapacitacion={() => navigate('/dashboard/capacitacion')}
-        />,
-      );
       return baseWidgets;
     }
 
@@ -266,6 +269,15 @@ export function Dashboard() {
 
     if (rolUsuario === "CAPACITADOR") {
       baseWidgets.push(
+        <WidgetResumenISO
+          key="widget-resumen-iso"
+          rol="CAPACITADOR"
+          stats={stats}
+          isLoading={cargandoStats}
+          onAbrirCapacitacion={() => navigate('/dashboard/capacitacion')}
+        />,
+      );
+      baseWidgets.push(
         <WidgetProgresoCursos
           key="widget-progreso-cursos"
           stats={stats}
@@ -277,7 +289,7 @@ export function Dashboard() {
     }
 
     return baseWidgets;
-  }, [cargandoStats, empresaNombre, esSuperAdmin, navigate, nombreUsuario, rolUsuario, rolVisible, stats]);
+  }, [cargandoStats, empresaNombre, esPerfilGlobal, esSuperAdmin, navigate, nombreUsuario, rolUsuario, rolVisible, stats]);
 
   return (
     <div className="space-y-8">
@@ -285,7 +297,7 @@ export function Dashboard() {
         {isRefreshingStats ? 'Actualizando métricas del dashboard' : 'Métricas del dashboard actualizadas'}
       </p>
 
-      {esSuperAdmin ? (
+      {esPerfilGlobal ? (
         <div className="space-y-6">
           {widgets}
         </div>

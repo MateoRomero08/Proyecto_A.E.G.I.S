@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Building2,
   CheckCircle2,
@@ -27,7 +28,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../app/components/ui/to
 import { Skeleton } from "../app/components/ui/skeleton";
 import { Badge } from "../app/components/ui/badge";
 import { RoleBadge } from "../components/RoleBadge";
-import { esSuperusuario, obtenerUsuario } from "../utils/auth";
+import { esAdminSistema, esSuperusuario, obtenerUsuario } from "../utils/auth";
 import {
   BitacoraAccion,
   BitacoraEvento,
@@ -50,7 +51,7 @@ type GlobalUserForm = {
   email: string;
   first_name: string;
   last_name: string;
-  rol: "EMPLEADO" | "IMPLEMENTADOR" | "AUDITOR" | "LIDER_EQUIPO" | "CAPACITADOR";
+  rol: "EMPLEADO" | "IMPLEMENTADOR" | "AUDITOR" | "LIDER_EQUIPO" | "CAPACITADOR" | "ADMIN_SISTEMA";
   empresa: number | null;
   is_active: boolean;
   is_approved: boolean;
@@ -191,7 +192,16 @@ const resumenBitacora = (detalle: Record<string, unknown>) => {
 
 export function GestionUsuarios() {
   const usuarioActual = obtenerUsuario();
-  const [panelActivo, setPanelActivo] = useState<"usuarios" | "bitacora">("usuarios");
+  const [searchParams] = useSearchParams();
+  const panelQuery = searchParams.get("panel");
+  const esSuperAdmin = esSuperusuario();
+  const esAdminSistemaGlobal = esAdminSistema();
+  const puedeGestionPremium = esSuperAdmin;
+  const puedeForense = esSuperAdmin || esAdminSistemaGlobal;
+
+  const [panelActivo, setPanelActivo] = useState<"usuarios" | "bitacora">(() => (
+    esAdminSistemaGlobal || panelQuery === "bitacora" ? "bitacora" : "usuarios"
+  ));
 
   const [stats, setStats] = useState<GlobalUsersStats | null>(null);
   const [usuarios, setUsuarios] = useState<GlobalUser[]>([]);
@@ -235,6 +245,16 @@ export function GestionUsuarios() {
     reset_link: string;
   } | null>(null);
 
+  useEffect(() => {
+    if (!puedeForense) {
+      return;
+    }
+
+    if (esAdminSistemaGlobal || panelQuery === "bitacora") {
+      setPanelActivo("bitacora");
+    }
+  }, [esAdminSistemaGlobal, panelQuery, puedeForense]);
+
   const totalPages = useMemo(() => Math.max(1, Math.ceil(totalCount / pageSize)), [totalCount, pageSize]);
   const pageStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
   const pageEnd = Math.min(page * pageSize, totalCount);
@@ -265,6 +285,11 @@ export function GestionUsuarios() {
   }, [bitacoraSearchInput]);
 
   useEffect(() => {
+    if (!puedeGestionPremium) {
+      setLoadingStats(false);
+      return;
+    }
+
     const loadStats = async () => {
       setLoadingStats(true);
       try {
@@ -278,9 +303,16 @@ export function GestionUsuarios() {
     };
 
     loadStats();
-  }, [reloadKey]);
+  }, [puedeGestionPremium, reloadKey]);
 
   useEffect(() => {
+    if (!puedeGestionPremium) {
+      setLoadingTable(false);
+      setUsuarios([]);
+      setTotalCount(0);
+      return;
+    }
+
     const loadUsers = async () => {
       setLoadingTable(true);
       try {
@@ -305,9 +337,15 @@ export function GestionUsuarios() {
     };
 
     loadUsers();
-  }, [page, pageSize, search, reloadKey]);
+  }, [page, pageSize, puedeGestionPremium, search, reloadKey]);
 
   useEffect(() => {
+    if (!puedeGestionPremium) {
+      setLoadingEmpresas(false);
+      setEmpresas([]);
+      return;
+    }
+
     const loadEmpresas = async () => {
       setLoadingEmpresas(true);
       try {
@@ -321,7 +359,7 @@ export function GestionUsuarios() {
     };
 
     loadEmpresas();
-  }, []);
+  }, [puedeGestionPremium]);
 
   useEffect(() => {
     if (panelActivo !== "bitacora") {
@@ -490,12 +528,12 @@ export function GestionUsuarios() {
     }
   };
 
-  if (!esSuperusuario()) {
+  if (!puedeForense) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-xl p-6">
         <h1 className="text-2xl font-bold text-red-900">Acceso Restringido</h1>
         <p className="text-red-700 mt-2">
-          Este módulo es exclusivo para superusuarios de infraestructura.
+          Este módulo requiere privilegios globales de administración/forense.
         </p>
       </div>
     );
@@ -505,9 +543,13 @@ export function GestionUsuarios() {
     <div className="space-y-6">
       <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Centro de Comando de Usuarios</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {puedeGestionPremium ? "G.U ADMIN" : "Bitácora Forense Global"}
+          </h1>
           <p className="text-gray-600 mt-1">
-            Administración global de identidades, estados y acceso multi-tenant.
+            {puedeGestionPremium
+              ? "Administración global de identidades, estados y acceso multi-tenant."
+              : "Consulta global de trazabilidad WORM para operaciones críticas de usuarios."}
           </p>
         </div>
 
@@ -519,75 +561,81 @@ export function GestionUsuarios() {
             <Loader2 className="w-4 h-4" />
             Refrescar
           </button>
-          <button
-            onClick={abrirCrear}
-            className="inline-flex items-center gap-2 bg-yellow-400 text-black font-semibold py-2.5 px-5 rounded-lg hover:bg-yellow-500 transition-colors shadow-md"
-          >
-            <Plus className="w-5 h-5" />
-            Crear Usuario
-          </button>
+          {puedeGestionPremium && (
+            <button
+              onClick={abrirCrear}
+              className="inline-flex items-center gap-2 bg-yellow-400 text-black font-semibold py-2.5 px-5 rounded-lg hover:bg-yellow-500 transition-colors shadow-md"
+            >
+              <Plus className="w-5 h-5" />
+              Crear Usuario
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {loadingStats || !stats ? (
-          Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="bg-white rounded-xl border border-gray-200 p-5">
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-8 w-16 mt-3" />
-            </div>
-          ))
-        ) : (
-          <>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-              <p className="text-sm text-gray-600">Total de Usuarios</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.total_users}</p>
-              <div className="mt-3 inline-flex items-center gap-2 text-xs text-slate-500">
-                <Users className="w-4 h-4" />
-                Universo de identidades
+      {puedeGestionPremium && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {loadingStats || !stats ? (
+            Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="bg-white rounded-xl border border-gray-200 p-5">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-8 w-16 mt-3" />
               </div>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-              <p className="text-sm text-gray-600">Usuarios Activos</p>
-              <p className="text-3xl font-bold text-emerald-700 mt-2">{stats.active_users}</p>
-              <div className="mt-3 inline-flex items-center gap-2 text-xs text-emerald-700">
-                <CheckCircle2 className="w-4 h-4" />
-                Cuentas habilitadas
+            ))
+          ) : (
+            <>
+              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <p className="text-sm text-gray-600">Total de Usuarios</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.total_users}</p>
+                <div className="mt-3 inline-flex items-center gap-2 text-xs text-slate-500">
+                  <Users className="w-4 h-4" />
+                  Universo de identidades
+                </div>
               </div>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-              <p className="text-sm text-gray-600">Administradores Globales</p>
-              <p className="text-3xl font-bold text-purple-700 mt-2">{stats.global_admins}</p>
-              <div className="mt-3 inline-flex items-center gap-2 text-xs text-purple-700">
-                <ShieldCheck className="w-4 h-4" />
-                Infraestructura
+              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <p className="text-sm text-gray-600">Usuarios Activos</p>
+                <p className="text-3xl font-bold text-emerald-700 mt-2">{stats.active_users}</p>
+                <div className="mt-3 inline-flex items-center gap-2 text-xs text-emerald-700">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Cuentas habilitadas
+                </div>
               </div>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-              <p className="text-sm text-gray-600">Empresas Registradas</p>
-              <p className="text-3xl font-bold text-blue-700 mt-2">{stats.total_companies}</p>
-              <div className="mt-3 inline-flex items-center gap-2 text-xs text-blue-700">
-                <Building2 className="w-4 h-4" />
-                Tenants activos
+              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <p className="text-sm text-gray-600">Administradores Globales</p>
+                <p className="text-3xl font-bold text-purple-700 mt-2">{stats.global_admins}</p>
+                <div className="mt-3 inline-flex items-center gap-2 text-xs text-purple-700">
+                  <ShieldCheck className="w-4 h-4" />
+                  Infraestructura
+                </div>
               </div>
-            </div>
-          </>
-        )}
-      </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <p className="text-sm text-gray-600">Empresas Registradas</p>
+                <p className="text-3xl font-bold text-blue-700 mt-2">{stats.total_companies}</p>
+                <div className="mt-3 inline-flex items-center gap-2 text-xs text-blue-700">
+                  <Building2 className="w-4 h-4" />
+                  Tenants activos
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-2 shadow-sm inline-flex items-center gap-2 w-fit">
-        <button
-          type="button"
-          onClick={() => setPanelActivo("usuarios")}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-            panelActivo === "usuarios"
-              ? "bg-slate-900 text-white"
-              : "text-slate-700 hover:bg-slate-100"
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          Gestión de Usuarios
-        </button>
+        {puedeGestionPremium && (
+          <button
+            type="button"
+            onClick={() => setPanelActivo("usuarios")}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              panelActivo === "usuarios"
+                ? "bg-slate-900 text-white"
+                : "text-slate-700 hover:bg-slate-100"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            G.U ADMIN
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setPanelActivo("bitacora")}

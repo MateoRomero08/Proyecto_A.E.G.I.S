@@ -23,7 +23,7 @@ import {
   listarCursosCapacitacion,
   TipoModulo,
 } from "../utils/capacitacionApi";
-import { esSuperusuario, obtenerUsuario } from "../utils/auth";
+import { esAdminSistema, esSuperusuario, obtenerUsuario } from "../utils/auth";
 import {
   descargarBlobComoArchivo,
   obtenerCertificadoCapacitacionBlob,
@@ -73,6 +73,8 @@ const parseApiError = (error: unknown, fallback: string): string => {
 export function Capacitacion() {
   const usuario = obtenerUsuario();
   const esSuperAdmin = esSuperusuario();
+  const esAdminGlobal = esAdminSistema();
+  const esPerfilGlobal = esSuperAdmin || esAdminGlobal;
   const { hasPermission } = usePermissions(usuario);
   const empresaIdUsuario = usuario?.empresa_info?.id ?? null;
 
@@ -107,10 +109,10 @@ export function Capacitacion() {
     duracion_minutos: '10',
   });
 
-  const puedeCrearCurso = esSuperAdmin || hasPermission('capacitacion.add_curso');
-  const puedeGestionar = esSuperAdmin || hasPermission('capacitacion.change_curso');
+  const puedeCrearCurso = esPerfilGlobal || hasPermission('capacitacion.add_curso');
+  const puedeGestionar = esPerfilGlobal || hasPermission('capacitacion.change_curso');
   const puedeAbrirPanelGestion = puedeCrearCurso || puedeGestionar;
-  const puedeReportarProgreso = !esSuperAdmin && Boolean(empresaIdUsuario);
+  const puedeReportarProgreso = !esPerfilGlobal && Boolean(empresaIdUsuario);
 
   const cargarCursos = async () => {
     setCargandoCursos(true);
@@ -133,7 +135,7 @@ export function Capacitacion() {
 
   const cursosGestionables = useMemo(() => {
     return cursos.filter((curso) => {
-      if (esSuperAdmin) {
+      if (esPerfilGlobal) {
         return curso.creado_por_admin;
       }
 
@@ -143,7 +145,7 @@ export function Capacitacion() {
 
       return false;
     });
-  }, [cursos, esSuperAdmin, puedeGestionar, empresaIdUsuario]);
+  }, [cursos, esPerfilGlobal, puedeGestionar, empresaIdUsuario]);
 
   useEffect(() => {
     if (cursosGestionables.length === 0) {
@@ -173,11 +175,11 @@ export function Capacitacion() {
     0,
   );
 
-  const tituloPanelGestion = esSuperAdmin
-    ? 'Panel SuperAdmin: Catalogo Global de Aegis'
+  const tituloPanelGestion = esPerfilGlobal
+    ? 'Panel Global: Catalogo Oficial Aegis'
     : 'Panel Gestion de Cursos Internos';
 
-  const descripcionPanelGestion = esSuperAdmin
+  const descripcionPanelGestion = esPerfilGlobal
     ? 'Los cursos creados aqui se publican para todas las empresas del SaaS.'
     : 'Gestiona cursos visibles solo para usuarios de tu empresa segun tus permisos.';
 
@@ -273,11 +275,11 @@ export function Capacitacion() {
     }
 
     if (curso.es_oficial_aegis) {
-      return esSuperAdmin;
+      return esPerfilGlobal;
     }
 
-    if (esSuperAdmin) {
-      return true;
+    if (esPerfilGlobal) {
+      return false;
     }
 
     return curso.empresa === empresaIdUsuario;
@@ -453,7 +455,7 @@ export function Capacitacion() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Capacitacion Hibrida</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Capacitación</h1>
           <p className="text-gray-600 mt-1">
             Catalogo Oficial Aegis + Cursos internos de cada empresa en una sola experiencia de aprendizaje.
           </p>
@@ -708,7 +710,7 @@ export function Capacitacion() {
                       {curso.progreso.modulos_completados_count}/{curso.progreso.total_modulos} modulos completados
                     </div>
 
-                    {!esSuperAdmin && curso.progreso.curso_completado && curso.progreso.id && (
+                    {!esPerfilGlobal && curso.progreso.curso_completado && curso.progreso.id && (
                       <button
                         onClick={() => {
                           void handleDescargarCertificado(curso);

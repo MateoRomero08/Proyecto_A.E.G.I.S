@@ -37,6 +37,15 @@ def _permisos_frontend_por_rol(usuario):
 
     rol = _rol_normalizado(usuario)
 
+    if rol == 'ADMIN_SISTEMA':
+        return {
+            PERMISOS_FRONTEND['VER_DASHBOARD'],
+            PERMISOS_FRONTEND['VER_USUARIOS_GLOBALES'],
+            PERMISOS_FRONTEND['VER_EQUIPO'],
+            PERMISOS_FRONTEND['VER_REPORTES'],
+            PERMISOS_FRONTEND['VER_CAPACITACION'],
+        }
+
     if rol == 'LIDER_EQUIPO':
         return {
             PERMISOS_FRONTEND['VER_DASHBOARD'],
@@ -48,14 +57,12 @@ def _permisos_frontend_por_rol(usuario):
         return {
             PERMISOS_FRONTEND['VER_DASHBOARD'],
             PERMISOS_FRONTEND['VER_IMPLEMENTACION'],
-            PERMISOS_FRONTEND['VER_CAPACITACION'],
         }
 
     if rol == 'AUDITOR':
         return {
             PERMISOS_FRONTEND['VER_DASHBOARD'],
             PERMISOS_FRONTEND['VER_AUDITORIA'],
-            PERMISOS_FRONTEND['VER_CAPACITACION'],
         }
 
     if rol in {'CAPACITADOR', 'EMPLEADO'}:
@@ -84,31 +91,6 @@ def _permisos_frontend_desde_nativos(permisos_nativos):
     for permiso_nativo, permiso_frontend in mapeo_directo.items():
         if permiso_nativo in permisos_nativos:
             permisos_frontend.add(permiso_frontend)
-
-    if {
-        'implementacion.view_evaluacioncontrol',
-        'implementacion.view_controliso',
-    } & permisos_nativos:
-        permisos_frontend.add(PERMISOS_FRONTEND['VER_IMPLEMENTACION'])
-
-    if {
-        'auditoria.view_procesoauditoria',
-        'auditoria.view_revisionauditoria',
-    } & permisos_nativos:
-        permisos_frontend.add(PERMISOS_FRONTEND['VER_AUDITORIA'])
-
-    if {
-        'capacitacion.view_cursocapacitacion',
-        'capacitacion.view_modulocontenido',
-        'capacitacion.view_progresousuario',
-    } & permisos_nativos:
-        permisos_frontend.add(PERMISOS_FRONTEND['VER_CAPACITACION'])
-
-    if 'usuarios.view_usuariocustom' in permisos_nativos:
-        permisos_frontend.add(PERMISOS_FRONTEND['VER_EQUIPO'])
-
-    if 'usuarios.manage_global_users' in permisos_nativos:
-        permisos_frontend.add(PERMISOS_FRONTEND['VER_USUARIOS_GLOBALES'])
 
     if permisos_frontend:
         permisos_frontend.add(PERMISOS_FRONTEND['VER_DASHBOARD'])
@@ -146,7 +128,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'date_joined', 'is_superuser', 'is_staff']
 
     def get_is_approved(self, obj):
-        if obj.is_staff or obj.is_superuser:
+        if obj.is_staff or obj.is_superuser or obj.rol == 'ADMIN_SISTEMA':
             return True
         return bool(getattr(obj, 'is_approved', False))
 
@@ -409,6 +391,12 @@ class GlobalUserAdminSerializer(serializers.ModelSerializer):
         if role_actual == 'AUDITOR_INTERNO':
             role_actual = 'AUDITOR'
             attrs['rol'] = role_actual
+
+        if role_actual == 'ADMIN_SISTEMA':
+            attrs['empresa'] = None
+            attrs['is_approved'] = True
+            attrs['es_administrador_empresa'] = False
+            return attrs
 
         flag_admin = attrs.get('es_administrador_empresa')
         if flag_admin is None and self.instance is not None:

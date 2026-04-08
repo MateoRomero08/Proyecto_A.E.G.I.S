@@ -19,6 +19,20 @@ PERMISOS_FRONTEND_CUSTOM = [
 ]
 
 ROLES_GRUPOS = {
+    "ADMIN_SISTEMA": {
+        "permisos": [
+            "usuarios.view_dashboard",
+            "usuarios.view_equipo",
+            "usuarios.view_reportes",
+            "usuarios.view_usuarios_globales",
+            "usuarios.view_capacitacion",
+            "usuarios.manage_global_users",
+            "usuarios.view_bitacoraseguridadusuario",
+            "capacitacion.view_cursocapacitacion",
+            "capacitacion.view_modulocontenido",
+            "capacitacion.view_progresousuario",
+        ]
+    },
     "EMPLEADO": {
         "permisos": [
             "usuarios.view_dashboard",
@@ -65,8 +79,6 @@ ROLES_GRUPOS = {
             "usuarios.view_reportes",
             "usuarios.view_usuariocustom",
             "usuarios.change_usuariocustom",
-            "implementacion.view_controliso",
-            "implementacion.view_evaluacioncontrol",
         ]
     },
     "CAPACITADOR": {

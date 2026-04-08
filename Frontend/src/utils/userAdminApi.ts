@@ -13,7 +13,7 @@ export interface GlobalUser {
   first_name: string;
   last_name: string;
   full_name: string;
-  rol: "EMPLEADO" | "IMPLEMENTADOR" | "AUDITOR" | "LIDER_EQUIPO" | "CAPACITADOR";
+  rol: "EMPLEADO" | "IMPLEMENTADOR" | "AUDITOR" | "LIDER_EQUIPO" | "CAPACITADOR" | "ADMIN_SISTEMA";
   rol_display: string;
   empresa: number | null;
   empresa_info: EmpresaOption | null;
@@ -46,7 +46,7 @@ export interface GlobalUserPayload {
   email: string;
   first_name: string;
   last_name: string;
-  rol: "EMPLEADO" | "IMPLEMENTADOR" | "AUDITOR" | "LIDER_EQUIPO" | "CAPACITADOR";
+  rol: "EMPLEADO" | "IMPLEMENTADOR" | "AUDITOR" | "LIDER_EQUIPO" | "CAPACITADOR" | "ADMIN_SISTEMA";
   empresa: number | null;
   is_active: boolean;
   is_approved: boolean;

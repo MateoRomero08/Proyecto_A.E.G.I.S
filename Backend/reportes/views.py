@@ -1,6 +1,7 @@
 from io import BytesIO
 
 from django.contrib.auth import get_user_model
+from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import get_template
@@ -13,10 +14,14 @@ from rest_framework.views import APIView
 from xhtml2pdf import pisa
 
 from auditoria.models import ProcesoAuditoria
-from capacitacion.models import ProgresoUsuario
+from capacitacion.models import CursoCapacitacion, ModuloContenido, ProgresoUsuario
 from implementacion.models import ControlISO, Empresa, EvaluacionControl
 from usuarios.models import BitacoraSeguridadUsuario
-from usuarios.permissions import IsApprovedUser, IsSuperAdminOnly
+from usuarios.permissions import (
+    IsApprovedUser,
+    IsSuperAdminOrAdminSistema,
+    es_acceso_global,
+)
 
 User = get_user_model()
 
@@ -48,10 +53,30 @@ class TenantReportMixin:
             or getattr(user, 'es_administrador_empresa', False)
         )
 
+    def _validar_acceso_reportes(self, user):
+        if es_acceso_global(user):
+            return
+
+        if self._es_lider_equipo(user):
+            return
+
+        raise PermissionDenied('Solo lideres de equipo y perfiles globales pueden generar reportes.')
+
+    def _cursos_visibles_empresa_queryset(self, empresa):
+        return (
+            CursoCapacitacion.objects.filter(activo=True)
+            .filter(
+                Q(creado_por_admin=True, empresa__isnull=True)
+                | Q(creado_por_admin=False, empresa=empresa)
+            )
+            .distinct()
+        )
+
     def _resolver_empresa(self, request):
         user = request.user
+        self._validar_acceso_reportes(user)
 
-        if user.is_superuser:
+        if es_acceso_global(user):
             empresa_id = request.query_params.get('empresa_id', '').strip()
             if not empresa_id:
                 raise ValidationError({'empresa_id': 'Debes enviar ?empresa_id=<id> para generar este reporte.'})
@@ -61,12 +86,10 @@ class TenantReportMixin:
 
             return get_object_or_404(Empresa, id=int(empresa_id))
 
-        if self._es_lider_equipo(user):
-            if not user.empresa_id:
-                raise PermissionDenied('Tu cuenta no tiene empresa asociada para generar reportes.')
-            return user.empresa
+        if not user.empresa_id:
+            raise PermissionDenied('Tu cuenta no tiene empresa asociada para generar reportes.')
 
-        raise PermissionDenied('Solo SuperAdmin o Lider de Equipo pueden exportar este reporte.')
+        return user.empresa
 
     def _filename(self, prefix, empresa=None):
         company_chunk = ''
@@ -85,17 +108,24 @@ class EmpresasReportesView(APIView):
 
     permission_classes = [permissions.IsAuthenticated, IsApprovedUser]
 
+    def _es_lider_equipo(self, user):
+        return bool(
+            getattr(user, 'rol', None) == 'LIDER_EQUIPO'
+            or getattr(user, 'es_administrador_empresa', False)
+        )
+
     def get(self, request):
         user = request.user
 
-        if user.is_superuser:
+        if es_acceso_global(user):
             queryset = Empresa.objects.all().order_by('nombre')
-        elif getattr(user, 'rol', None) == 'LIDER_EQUIPO' or getattr(user, 'es_administrador_empresa', False):
+        else:
+            if not self._es_lider_equipo(user):
+                raise PermissionDenied('Solo lideres de equipo y perfiles globales pueden acceder a reportes.')
+
             if not user.empresa_id:
                 return Response([], status=status.HTTP_200_OK)
             queryset = Empresa.objects.filter(id=user.empresa_id)
-        else:
-            raise PermissionDenied('No tienes permisos para consultar empresas de reportes.')
 
         data = [
             {
@@ -252,8 +282,167 @@ class ReporteAuditoriaPDFView(TenantReportMixin, APIView):
         return _build_pdf_response('reportes/auditoria_detalle.html', context, filename)
 
 
+class UsuariosCapacitacionReportesView(TenantReportMixin, APIView):
+    """
+    Lista avance de capacitación por usuario para la empresa resuelta.
+    """
+
+    def get(self, request):
+        empresa = self._resolver_empresa(request)
+        cursos_visibles_qs = self._cursos_visibles_empresa_queryset(empresa)
+        total_cursos_asignados = cursos_visibles_qs.count()
+        total_modulos_disponibles = ModuloContenido.objects.filter(
+            curso__in=cursos_visibles_qs,
+            activo=True,
+        ).count()
+
+        usuarios = (
+            User.objects.filter(empresa=empresa, is_active=True)
+            .order_by('last_name', 'first_name', 'username')
+        )
+
+        agregados_progreso = {
+            fila['usuario_id']: fila
+            for fila in ProgresoUsuario.objects.filter(
+                usuario__empresa=empresa,
+                curso__in=cursos_visibles_qs,
+            )
+            .values('usuario_id')
+            .annotate(
+                cursos_completados=Count('curso_id', filter=Q(curso_completado=True), distinct=True),
+                cursos_en_progreso=Count(
+                    'curso_id',
+                    filter=Q(porcentaje_completado__gt=0, curso_completado=False),
+                    distinct=True,
+                ),
+                modulos_completados=Count('modulos_completados', distinct=True),
+            )
+        }
+
+        data = []
+        for usuario in usuarios:
+            agregado = agregados_progreso.get(usuario.id, {})
+            cursos_completados = int(agregado.get('cursos_completados', 0) or 0)
+            cursos_en_progreso = int(agregado.get('cursos_en_progreso', 0) or 0)
+            cursos_pendientes = max(total_cursos_asignados - cursos_completados - cursos_en_progreso, 0)
+            porcentaje_global = (
+                round((cursos_completados / total_cursos_asignados) * 100, 2)
+                if total_cursos_asignados
+                else 0
+            )
+
+            data.append(
+                {
+                    'id': usuario.id,
+                    'username': usuario.username,
+                    'nombre': _nombre_usuario(usuario),
+                    'email': usuario.email,
+                    'rol': usuario.get_rol_display() if hasattr(usuario, 'get_rol_display') else usuario.rol,
+                    'cursos_asignados': total_cursos_asignados,
+                    'cursos_completados': cursos_completados,
+                    'cursos_en_progreso': cursos_en_progreso,
+                    'cursos_pendientes': cursos_pendientes,
+                    'porcentaje_global': porcentaje_global,
+                    'modulos_completados': int(agregado.get('modulos_completados', 0) or 0),
+                    'total_modulos_disponibles': total_modulos_disponibles,
+                }
+            )
+
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class ReporteCapacitacionUsuarioPDFView(TenantReportMixin, APIView):
+    """
+    Genera PDF de avance de capacitación por usuario para la empresa resuelta.
+    """
+
+    def get(self, request, id_usuario):
+        empresa = self._resolver_empresa(request)
+        usuario_objetivo = get_object_or_404(
+            User.objects.select_related('empresa'),
+            id=id_usuario,
+            empresa=empresa,
+            is_active=True,
+        )
+
+        cursos_visibles_qs = self._cursos_visibles_empresa_queryset(empresa).prefetch_related('modulos')
+        cursos_visibles = list(cursos_visibles_qs)
+
+        progresos_qs = ProgresoUsuario.objects.filter(
+            usuario=usuario_objetivo,
+            curso__in=cursos_visibles_qs,
+        ).prefetch_related('modulos_completados')
+        progreso_por_curso_id = {progreso.curso_id: progreso for progreso in progresos_qs}
+
+        filas = []
+        cursos_completados = 0
+        cursos_en_progreso = 0
+        total_modulos = 0
+        total_modulos_completados = 0
+
+        for curso in cursos_visibles:
+            progreso = progreso_por_curso_id.get(curso.id)
+            total_modulos_curso = sum(1 for modulo in curso.modulos.all() if modulo.activo)
+            total_modulos += total_modulos_curso
+
+            if progreso:
+                modulos_completados = progreso.modulos_completados.filter(curso=curso, activo=True).count()
+                porcentaje = progreso.porcentaje_completado
+                completado = progreso.curso_completado
+                fecha_completado = progreso.fecha_completado
+            else:
+                modulos_completados = 0
+                porcentaje = 0
+                completado = False
+                fecha_completado = None
+
+            total_modulos_completados += modulos_completados
+
+            if completado:
+                estado = 'Completado'
+                cursos_completados += 1
+            elif porcentaje > 0:
+                estado = 'En progreso'
+                cursos_en_progreso += 1
+            else:
+                estado = 'Pendiente'
+
+            filas.append(
+                {
+                    'curso_titulo': curso.titulo,
+                    'alcance': 'Oficial Aegis' if curso.creado_por_admin else f'Interno {empresa.nombre}',
+                    'estado': estado,
+                    'porcentaje': porcentaje,
+                    'modulos_completados': modulos_completados,
+                    'total_modulos': total_modulos_curso,
+                    'fecha_completado': timezone.localtime(fecha_completado) if fecha_completado else None,
+                }
+            )
+
+        total_cursos = len(filas)
+        cursos_pendientes = max(total_cursos - cursos_completados - cursos_en_progreso, 0)
+        porcentaje_global = round((cursos_completados / total_cursos) * 100, 2) if total_cursos else 0
+
+        context = {
+            'empresa': empresa,
+            'usuario_objetivo': usuario_objetivo,
+            'fecha_corte': timezone.localtime(),
+            'total_cursos': total_cursos,
+            'cursos_completados': cursos_completados,
+            'cursos_en_progreso': cursos_en_progreso,
+            'cursos_pendientes': cursos_pendientes,
+            'porcentaje_global': porcentaje_global,
+            'total_modulos': total_modulos,
+            'total_modulos_completados': total_modulos_completados,
+            'filas': filas,
+        }
+
+        filename = self._filename(f'reporte-capacitacion-{slugify(usuario_objetivo.username)}', empresa)
+        return _build_pdf_response('reportes/capacitacion_usuario.html', context, filename)
+
+
 class ReporteForensePDFView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsSuperAdminOnly]
+    permission_classes = [permissions.IsAuthenticated, IsSuperAdminOrAdminSistema]
 
     def get(self, request):
         limit_raw = request.query_params.get('limit', '120').strip()

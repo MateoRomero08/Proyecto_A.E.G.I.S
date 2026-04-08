@@ -47,6 +47,13 @@ class ReportesPDFEndpointsTestCase(TestCase):
             email='root@aegis.com',
             password='Password123!',
         )
+        self.admin_sistema = User.objects.create_user(
+            username='admin_sistema',
+            email='admin.sistema@aegis.com',
+            password='Password123!',
+            rol='ADMIN_SISTEMA',
+            is_approved=True,
+        )
         self.lider = User.objects.create_user(
             username='lider_empresa_uno',
             email='lider@empresauno.com',
@@ -160,10 +167,14 @@ class ReportesPDFEndpointsTestCase(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_forense_solo_superadmin(self):
+    def test_forense_perfiles_globales(self):
         self.client.force_authenticate(user=self.lider)
         response_lider = self.client.get('/api/reportes/forense/')
         self.assertEqual(response_lider.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.admin_sistema)
+        response_admin_sistema = self.client.get('/api/reportes/forense/?limit=25')
+        self._assert_pdf_response(response_admin_sistema)
 
         self.client.force_authenticate(user=self.superuser)
         response_root = self.client.get('/api/reportes/forense/?limit=25')
@@ -211,3 +222,33 @@ class ReportesPDFEndpointsTestCase(TestCase):
         self.assertEqual(auditorias_lider.status_code, status.HTTP_200_OK)
         self.assertEqual(len(auditorias_lider.data), 1)
         self.assertEqual(auditorias_lider.data[0]['id'], self.proceso.id)
+
+    def test_reporte_capacitacion_por_usuario_para_lider(self):
+        self.client.force_authenticate(user=self.lider)
+
+        listado = self.client.get('/api/reportes/capacitacion/usuarios/')
+        self.assertEqual(listado.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(listado.data), 3)
+
+        fila_empleado = next((item for item in listado.data if item['id'] == self.empleado.id), None)
+        self.assertIsNotNone(fila_empleado)
+        self.assertEqual(fila_empleado['cursos_asignados'], 1)
+        self.assertEqual(fila_empleado['cursos_completados'], 1)
+
+        pdf = self.client.get(
+            f'/api/reportes/capacitacion/usuario/{self.empleado.id}/?empresa_id={self.empresa_2.id}'
+        )
+        self._assert_pdf_response(pdf)
+        self.assertIn('empresa-uno', pdf['Content-Disposition'])
+
+    def test_reporte_capacitacion_por_usuario_para_superadmin(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        listado = self.client.get(f'/api/reportes/capacitacion/usuarios/?empresa_id={self.empresa_1.id}')
+        self.assertEqual(listado.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(listado.data), 3)
+
+        pdf = self.client.get(
+            f'/api/reportes/capacitacion/usuario/{self.empleado.id}/?empresa_id={self.empresa_1.id}'
+        )
+        self._assert_pdf_response(pdf)

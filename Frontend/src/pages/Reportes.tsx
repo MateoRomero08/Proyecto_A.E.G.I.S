@@ -6,6 +6,7 @@ import {
   Download,
   FileLock2,
   FileText,
+  GraduationCap,
   Loader2,
   Shield,
 } from "lucide-react";
@@ -15,15 +16,18 @@ import {
   descargarBlobComoArchivo,
   listarAuditoriasReportes,
   listarEmpresasReportes,
+  listarUsuariosCapacitacionReportes,
   obtenerReporteAccesosBlob,
   obtenerReporteAuditoriaBlob,
+  obtenerReporteCapacitacionUsuarioBlob,
   obtenerReporteCumplimientoBlob,
   obtenerReporteForenseBlob,
   type PdfBlobPayload,
   type AuditoriaReporte,
   type EmpresaReporte,
+  type UsuarioCapacitacionReporte,
 } from "../utils/reportesApi";
-import { esSuperusuario, obtenerRolUsuario, obtenerUsuario } from "../utils/auth";
+import { esAdminSistema, esSuperusuario, obtenerUsuario } from "../utils/auth";
 import { PdfPreviewModal } from "../components/PdfPreviewModal";
 
 const parseApiError = (error: unknown, fallback: string): string => {
@@ -51,14 +55,17 @@ const parseApiError = (error: unknown, fallback: string): string => {
 export function Reportes() {
   const usuario = obtenerUsuario();
   const esSuperAdmin = esSuperusuario();
-  const rol = obtenerRolUsuario();
-  const esLider = rol === 'LIDER_EQUIPO';
+  const esAdminGlobal = esAdminSistema();
+  const esGlobal = esSuperAdmin || esAdminGlobal;
+  const puedeReporteForense = esGlobal;
 
   const [empresas, setEmpresas] = useState<EmpresaReporte[]>([]);
   const [empresaSeleccionadaId, setEmpresaSeleccionadaId] = useState<number | null>(null);
   const [auditorias, setAuditorias] = useState<AuditoriaReporte[]>([]);
+  const [usuariosCapacitacion, setUsuariosCapacitacion] = useState<UsuarioCapacitacionReporte[]>([]);
   const [cargandoEmpresas, setCargandoEmpresas] = useState(false);
   const [cargandoAuditorias, setCargandoAuditorias] = useState(false);
+  const [cargandoUsuariosCapacitacion, setCargandoUsuariosCapacitacion] = useState(false);
   const [accionDescarga, setAccionDescarga] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
@@ -66,7 +73,7 @@ export function Reportes() {
   const [previewFileName, setPreviewFileName] = useState('reporte.pdf');
   const [previewTitle, setPreviewTitle] = useState('Previsualización PDF');
 
-  const accesoPermitido = esSuperAdmin || esLider;
+  const accesoPermitido = esGlobal || Boolean(usuario?.empresa_info?.id);
 
   useEffect(() => {
     if (!accesoPermitido) {
@@ -85,7 +92,7 @@ export function Reportes() {
 
         setEmpresas(data);
 
-        if (esSuperAdmin) {
+        if (esGlobal) {
           setEmpresaSeleccionadaId((prev) => prev ?? data[0]?.id ?? null);
         } else {
           const empresaPropia = data[0]?.id ?? usuario?.empresa_info?.id ?? null;
@@ -109,14 +116,14 @@ export function Reportes() {
     return () => {
       mounted = false;
     };
-  }, [accesoPermitido, esSuperAdmin, usuario?.empresa_info?.id]);
+  }, [accesoPermitido, esGlobal, usuario?.empresa_info?.id]);
 
   useEffect(() => {
     if (!accesoPermitido) {
       return;
     }
 
-    if (esSuperAdmin && !empresaSeleccionadaId) {
+    if (esGlobal && !empresaSeleccionadaId) {
       setAuditorias([]);
       return;
     }
@@ -126,7 +133,7 @@ export function Reportes() {
     const cargarAuditorias = async () => {
       setCargandoAuditorias(true);
       try {
-        const data = await listarAuditoriasReportes(esSuperAdmin ? empresaSeleccionadaId : null);
+        const data = await listarAuditoriasReportes(esGlobal ? empresaSeleccionadaId : null);
         if (mounted) {
           setAuditorias(data);
         }
@@ -148,7 +155,46 @@ export function Reportes() {
     return () => {
       mounted = false;
     };
-  }, [accesoPermitido, empresaSeleccionadaId, esSuperAdmin]);
+  }, [accesoPermitido, empresaSeleccionadaId, esGlobal]);
+
+  useEffect(() => {
+    if (!accesoPermitido) {
+      return;
+    }
+
+    if (esGlobal && !empresaSeleccionadaId) {
+      setUsuariosCapacitacion([]);
+      return;
+    }
+
+    let mounted = true;
+
+    const cargarUsuariosCapacitacion = async () => {
+      setCargandoUsuariosCapacitacion(true);
+      try {
+        const data = await listarUsuariosCapacitacionReportes(esGlobal ? empresaSeleccionadaId : null);
+        if (mounted) {
+          setUsuariosCapacitacion(data);
+        }
+      } catch (error) {
+        if (mounted) {
+          toast.error('No se pudo cargar el avance de capacitación por usuario.', {
+            description: parseApiError(error, 'Intenta nuevamente.'),
+          });
+        }
+      } finally {
+        if (mounted) {
+          setCargandoUsuariosCapacitacion(false);
+        }
+      }
+    };
+
+    void cargarUsuariosCapacitacion();
+
+    return () => {
+      mounted = false;
+    };
+  }, [accesoPermitido, empresaSeleccionadaId, esGlobal]);
 
   const empresaSeleccionada = useMemo(
     () => empresas.find((empresa) => empresa.id === empresaSeleccionadaId) || null,
@@ -217,7 +263,7 @@ export function Reportes() {
           <AlertTriangle className="w-6 h-6 mt-0.5" />
           <div>
             <h1 className="text-xl font-bold">Acceso restringido</h1>
-            <p className="text-sm mt-1">Este modulo de reportes solo esta habilitado para SuperAdmin y Lider de Equipo.</p>
+            <p className="text-sm mt-1">Este modulo de reportes solo esta habilitado para SuperAdmin, ADMIN_SISTEMA y Lider de Equipo.</p>
           </div>
         </div>
       </div>
@@ -233,9 +279,9 @@ export function Reportes() {
             <h1 className="text-3xl font-black mt-1">Exportacion Profesional ISO 27001</h1>
             <p className="text-sm text-slate-200 mt-2 max-w-3xl">
               Genera documentos PDF oficiales de cumplimiento, auditoria y control de accesos.
-              {esSuperAdmin
-                ? ' Como SuperAdmin puedes operar reportes por tenant y emitir el extracto forense WORM global.'
-                : ' Como Lider de Equipo, la exportacion se limita automaticamente a tu empresa.'}
+              {esGlobal
+                ? ' Como perfil global puedes operar reportes por tenant y emitir extractos de alcance global.'
+                : ' Tu exportacion se limita automaticamente a tu empresa.'}
             </p>
           </div>
 
@@ -252,7 +298,7 @@ export function Reportes() {
         </div>
       </section>
 
-      {esSuperAdmin && (
+      {esGlobal && (
         <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-3 text-slate-800 font-semibold">
             <Building2 className="w-4 h-4" />
@@ -292,12 +338,12 @@ export function Reportes() {
               onClick={() => {
                 void ejecutarExportacionPDF(
                   'cumplimiento',
-                  () => obtenerReporteCumplimientoBlob(esSuperAdmin ? empresaSeleccionadaId : null),
+                  () => obtenerReporteCumplimientoBlob(esGlobal ? empresaSeleccionadaId : null),
                   'Reporte de estado de cumplimiento exportado.',
                   'Previsualización · Estado de Cumplimiento ISO',
                 );
               }}
-              disabled={accionDescarga === 'cumplimiento' || (esSuperAdmin && !empresaSeleccionadaId)}
+              disabled={accionDescarga === 'cumplimiento' || (esGlobal && !empresaSeleccionadaId)}
               className="inline-flex items-center justify-center gap-2 bg-yellow-400 text-black font-semibold py-2.5 px-4 rounded-lg hover:bg-yellow-500 transition-colors disabled:opacity-60"
             >
               {accionDescarga === 'cumplimiento' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
@@ -308,12 +354,12 @@ export function Reportes() {
               onClick={() => {
                 void ejecutarExportacionPDF(
                   'accesos',
-                  () => obtenerReporteAccesosBlob(esSuperAdmin ? empresaSeleccionadaId : null),
+                  () => obtenerReporteAccesosBlob(esGlobal ? empresaSeleccionadaId : null),
                   'Matriz de accesos exportada.',
                   'Previsualización · Matriz de Accesos (A.9)',
                 );
               }}
-              disabled={accionDescarga === 'accesos' || (esSuperAdmin && !empresaSeleccionadaId)}
+              disabled={accionDescarga === 'accesos' || (esGlobal && !empresaSeleccionadaId)}
               className="inline-flex items-center justify-center gap-2 bg-slate-900 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-black transition-colors disabled:opacity-60"
             >
               {accionDescarga === 'accesos' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
@@ -326,7 +372,7 @@ export function Reportes() {
           <h2 className="text-lg font-bold text-gray-900">Reporte Forense AEGIS</h2>
           <p className="text-sm text-gray-600 mt-1">Extracto WORM de eventos criticos de seguridad del SaaS.</p>
 
-          {esSuperAdmin ? (
+          {puedeReporteForense ? (
             <button
               onClick={() => {
                 void ejecutarExportacionPDF(
@@ -344,7 +390,7 @@ export function Reportes() {
             </button>
           ) : (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 px-4 py-3 text-sm">
-              El reporte forense WORM es exclusivo de SuperAdmin.
+              El reporte forense WORM requiere privilegios globales de bitácora.
             </div>
           )}
         </article>
@@ -397,12 +443,84 @@ export function Reportes() {
                       onClick={() => {
                         void ejecutarExportacionPDF(
                           accionKey,
-                          () => obtenerReporteAuditoriaBlob(auditoria.id, esSuperAdmin ? empresaSeleccionadaId : null),
+                          () => obtenerReporteAuditoriaBlob(auditoria.id, esGlobal ? empresaSeleccionadaId : null),
                           `Reporte de auditoria "${auditoria.nombre}" exportado.`,
                           `Previsualización · Auditoría ${auditoria.nombre}`,
                         );
                       }}
                       disabled={accionDescarga === accionKey}
+                      className="inline-flex items-center justify-center gap-2 bg-white border border-slate-300 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-60"
+                    >
+                      {accionDescarga === accionKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Descargar PDF
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Reportes de Capacitación por Usuario</h2>
+            <p className="text-sm text-gray-600">Seguimiento del avance academico individual por empresa.</p>
+          </div>
+
+          <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 text-slate-700">
+            <GraduationCap className="w-3.5 h-3.5" />
+            {cargandoUsuariosCapacitacion ? 'Actualizando...' : `${usuariosCapacitacion.length} usuario(s)`}
+          </div>
+        </div>
+
+        <div className="p-5">
+          {cargandoUsuariosCapacitacion ? (
+            <div className="text-sm text-gray-500 inline-flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Cargando avance de capacitación...
+            </div>
+          ) : usuariosCapacitacion.length === 0 ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-gray-600">
+              No existen usuarios con datos de capacitación para la empresa seleccionada.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {usuariosCapacitacion.map((usuarioCapacitacion) => {
+                const accionKey = `capacitacion-usuario-${usuarioCapacitacion.id}`;
+
+                return (
+                  <div
+                    key={usuarioCapacitacion.id}
+                    className="rounded-lg border border-gray-200 p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3"
+                  >
+                    <div>
+                      <p className="font-semibold text-gray-900">{usuarioCapacitacion.nombre}</p>
+                      <p className="text-sm text-gray-600 mt-0.5">
+                        {usuarioCapacitacion.email} · {usuarioCapacitacion.rol}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Cursos: {usuarioCapacitacion.cursos_completados}/{usuarioCapacitacion.cursos_asignados} completados ·
+                        En progreso: {usuarioCapacitacion.cursos_en_progreso} ·
+                        Pendientes: {usuarioCapacitacion.cursos_pendientes} ·
+                        Avance global: {usuarioCapacitacion.porcentaje_global}%
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        void ejecutarExportacionPDF(
+                          accionKey,
+                          () => obtenerReporteCapacitacionUsuarioBlob(
+                            usuarioCapacitacion.id,
+                            esGlobal ? empresaSeleccionadaId : null,
+                          ),
+                          `Reporte de capacitación de ${usuarioCapacitacion.nombre} exportado.`,
+                          `Previsualización · Capacitación ${usuarioCapacitacion.nombre}`,
+                        );
+                      }}
+                      disabled={accionDescarga === accionKey || (esGlobal && !empresaSeleccionadaId)}
                       className="inline-flex items-center justify-center gap-2 bg-white border border-slate-300 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-60"
                     >
                       {accionDescarga === accionKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}

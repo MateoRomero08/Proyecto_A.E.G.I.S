@@ -13,7 +13,7 @@ export function Hero() {
         {/* Badge */}
         <div className="inline-flex items-center px-4 py-2 mb-8 bg-yellow-400/10 border border-yellow-400/20 rounded-full">
           <span className="text-yellow-400 text-sm font-semibold">
-            ✨ Solución Certificada ISO 27001
+             Solución ISO 27001 para PYMES
           </span>
         </div>
 

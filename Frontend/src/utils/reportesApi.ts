@@ -16,6 +16,21 @@ export interface AuditoriaReporte {
   empresa_nombre: string;
 }
 
+export interface UsuarioCapacitacionReporte {
+  id: number;
+  username: string;
+  nombre: string;
+  email: string;
+  rol: string;
+  cursos_asignados: number;
+  cursos_completados: number;
+  cursos_en_progreso: number;
+  cursos_pendientes: number;
+  porcentaje_global: number;
+  modulos_completados: number;
+  total_modulos_disponibles: number;
+}
+
 export interface PdfBlobPayload {
   blob: Blob;
   filename: string;
@@ -109,6 +124,9 @@ export const listarEmpresasReportes = (): Promise<EmpresaReporte[]> => fetchJson
 export const listarAuditoriasReportes = (empresaId?: number | null): Promise<AuditoriaReporte[]> =>
   fetchJson<AuditoriaReporte[]>(`/auditorias/${buildEmpresaQuery(empresaId)}`);
 
+export const listarUsuariosCapacitacionReportes = (empresaId?: number | null): Promise<UsuarioCapacitacionReporte[]> =>
+  fetchJson<UsuarioCapacitacionReporte[]>(`/capacitacion/usuarios/${buildEmpresaQuery(empresaId)}`);
+
 export const obtenerReporteCumplimientoBlob = (empresaId?: number | null): Promise<PdfBlobPayload> =>
   fetchPdfBlob(`/cumplimiento/${buildEmpresaQuery(empresaId)}`, 'reporte-cumplimiento-iso.pdf');
 
@@ -120,6 +138,15 @@ export const obtenerReporteAccesosBlob = (empresaId?: number | null): Promise<Pd
 
 export const obtenerReporteForenseBlob = (limit = 120): Promise<PdfBlobPayload> =>
   fetchPdfBlob(`/forense/?limit=${limit}`, 'reporte-forense-worm-aegis.pdf');
+
+export const obtenerReporteCapacitacionUsuarioBlob = (
+  idUsuario: number,
+  empresaId?: number | null,
+): Promise<PdfBlobPayload> =>
+  fetchPdfBlob(
+    `/capacitacion/usuario/${idUsuario}/${buildEmpresaQuery(empresaId)}`,
+    `reporte-capacitacion-${idUsuario}.pdf`,
+  );
 
 export const obtenerCertificadoCapacitacionBlob = (idProgreso: number): Promise<PdfBlobPayload> =>
   fetchPdfBlob(`/certificado/${idProgreso}/`, `certificado-${idProgreso}.pdf`);
@@ -141,6 +168,14 @@ export const descargarReporteAccesos = async (empresaId?: number | null): Promis
 
 export const descargarReporteForense = async (limit = 120): Promise<void> => {
   const data = await obtenerReporteForenseBlob(limit);
+  descargarBlobComoArchivo(data.blob, data.filename);
+};
+
+export const descargarReporteCapacitacionUsuario = async (
+  idUsuario: number,
+  empresaId?: number | null,
+): Promise<void> => {
+  const data = await obtenerReporteCapacitacionUsuarioBlob(idUsuario, empresaId);
   descargarBlobComoArchivo(data.blob, data.filename);
 };
 

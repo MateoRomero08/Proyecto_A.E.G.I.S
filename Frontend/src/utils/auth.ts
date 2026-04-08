@@ -7,7 +7,7 @@
 const TOKEN_KEY = 'token_acceso';
 const USER_KEY = 'usuario_info';
 
-export type RolUsuario = 'EMPLEADO' | 'IMPLEMENTADOR' | 'AUDITOR' | 'LIDER_EQUIPO' | 'CAPACITADOR';
+export type RolUsuario = 'EMPLEADO' | 'IMPLEMENTADOR' | 'AUDITOR' | 'LIDER_EQUIPO' | 'CAPACITADOR' | 'ADMIN_SISTEMA';
 type RolUsuarioBackend = RolUsuario | 'AUDITOR_INTERNO';
 
 export const PERMISOS_FRONTEND = {
@@ -18,6 +18,11 @@ export const PERMISOS_FRONTEND = {
   VER_EQUIPO: 'frontend.view_equipo',
   VER_REPORTES: 'frontend.view_reportes',
   VER_USUARIOS_GLOBALES: 'frontend.view_usuarios_globales',
+} as const;
+
+export const PERMISOS_BACKEND = {
+  ADMIN_SISTEMA: 'usuarios.manage_global_users',
+  VER_BITACORA_SEGURIDAD: 'usuarios.view_bitacoraseguridadusuario',
 } as const;
 
 export type UsuarioAuthShape = {
@@ -64,6 +69,14 @@ const permisosCompatibilidadPorRol = (rol: RolUsuario | null, isSuperuser: boole
   }
 
   switch (rol) {
+    case 'ADMIN_SISTEMA':
+      return [
+        PERMISOS_FRONTEND.VER_DASHBOARD,
+        PERMISOS_FRONTEND.VER_USUARIOS_GLOBALES,
+        PERMISOS_FRONTEND.VER_EQUIPO,
+        PERMISOS_FRONTEND.VER_REPORTES,
+        PERMISOS_FRONTEND.VER_CAPACITACION,
+      ];
     case 'LIDER_EQUIPO':
       return [
         PERMISOS_FRONTEND.VER_DASHBOARD,
@@ -74,13 +87,11 @@ const permisosCompatibilidadPorRol = (rol: RolUsuario | null, isSuperuser: boole
       return [
         PERMISOS_FRONTEND.VER_DASHBOARD,
         PERMISOS_FRONTEND.VER_IMPLEMENTACION,
-        PERMISOS_FRONTEND.VER_CAPACITACION,
       ];
     case 'AUDITOR':
       return [
         PERMISOS_FRONTEND.VER_DASHBOARD,
         PERMISOS_FRONTEND.VER_AUDITORIA,
-        PERMISOS_FRONTEND.VER_CAPACITACION,
       ];
     case 'CAPACITADOR':
     case 'EMPLEADO':
@@ -102,11 +113,83 @@ const normalizarRol = (rol?: string): RolUsuario | null => {
     return 'AUDITOR';
   }
 
-  if (rol === 'EMPLEADO' || rol === 'IMPLEMENTADOR' || rol === 'AUDITOR' || rol === 'LIDER_EQUIPO' || rol === 'CAPACITADOR') {
+  if (
+    rol === 'EMPLEADO'
+    || rol === 'IMPLEMENTADOR'
+    || rol === 'AUDITOR'
+    || rol === 'LIDER_EQUIPO'
+    || rol === 'CAPACITADOR'
+    || rol === 'ADMIN_SISTEMA'
+  ) {
     return rol;
   }
 
   return null;
+};
+
+const esAdminSistemaUsuario = (usuario: UsuarioAuthShape | null): boolean => {
+  if (!usuario || usuario.is_superuser) {
+    return false;
+  }
+
+  const rol = normalizarRol(String(usuario.rol || ''));
+  if (rol === 'ADMIN_SISTEMA') {
+    return true;
+  }
+
+  const permisos = normalizarPermisos(usuario.permisos);
+  return permisos.includes(PERMISOS_BACKEND.ADMIN_SISTEMA);
+};
+
+const permisosFrontendEstrictos = (usuario: UsuarioAuthShape | null): Set<string> => {
+  const permisos = new Set<string>();
+  if (!usuario) {
+    return permisos;
+  }
+
+  if (usuario.is_superuser || esAdminSistemaUsuario(usuario)) {
+    permisos.add(PERMISOS_FRONTEND.VER_DASHBOARD);
+    permisos.add(PERMISOS_FRONTEND.VER_USUARIOS_GLOBALES);
+    permisos.add(PERMISOS_FRONTEND.VER_EQUIPO);
+    permisos.add(PERMISOS_FRONTEND.VER_REPORTES);
+    permisos.add(PERMISOS_FRONTEND.VER_CAPACITACION);
+    return permisos;
+  }
+
+  const rol = normalizarRol(String(usuario.rol || ''));
+
+  switch (rol) {
+    case 'ADMIN_SISTEMA':
+      permisos.add(PERMISOS_FRONTEND.VER_DASHBOARD);
+      permisos.add(PERMISOS_FRONTEND.VER_USUARIOS_GLOBALES);
+      permisos.add(PERMISOS_FRONTEND.VER_EQUIPO);
+      permisos.add(PERMISOS_FRONTEND.VER_REPORTES);
+      permisos.add(PERMISOS_FRONTEND.VER_CAPACITACION);
+      break;
+    case 'LIDER_EQUIPO':
+      permisos.add(PERMISOS_FRONTEND.VER_DASHBOARD);
+      permisos.add(PERMISOS_FRONTEND.VER_EQUIPO);
+      permisos.add(PERMISOS_FRONTEND.VER_REPORTES);
+      break;
+    case 'IMPLEMENTADOR':
+      permisos.add(PERMISOS_FRONTEND.VER_DASHBOARD);
+      permisos.add(PERMISOS_FRONTEND.VER_IMPLEMENTACION);
+      break;
+    case 'AUDITOR':
+      permisos.add(PERMISOS_FRONTEND.VER_DASHBOARD);
+      permisos.add(PERMISOS_FRONTEND.VER_AUDITORIA);
+      break;
+    case 'CAPACITADOR':
+    case 'EMPLEADO':
+      permisos.add(PERMISOS_FRONTEND.VER_DASHBOARD);
+      permisos.add(PERMISOS_FRONTEND.VER_CAPACITACION);
+      break;
+    default:
+      permisos.add(PERMISOS_FRONTEND.VER_DASHBOARD);
+      break;
+  }
+
+  return permisos;
 };
 
 const normalizarUsuarioAuth = (usuario: UsuarioAuthShape | null): UsuarioAuthShape | null => {
@@ -120,6 +203,7 @@ const normalizarUsuarioAuth = (usuario: UsuarioAuthShape | null): UsuarioAuthSha
     ? 'LIDER_EQUIPO'
     : rolNormalizado;
   const esLider = rolFinal === 'LIDER_EQUIPO';
+  const esAdminSistema = rolFinal === 'ADMIN_SISTEMA';
   const permisosBackend = normalizarPermisos(usuario.permisos);
   // Compatibilidad con sesiones persistidas previas al campo `permisos`.
   const permisosCompatibilidad = permisosBackend.length === 0
@@ -133,8 +217,12 @@ const normalizarUsuarioAuth = (usuario: UsuarioAuthShape | null): UsuarioAuthSha
     permisos: permisosFinales,
     is_superuser: isSuperuser,
     is_staff: Boolean(usuario.is_staff),
-    is_approved: Boolean(isSuperuser || usuario.is_approved),
-    es_administrador_empresa: Boolean(isSuperuser || esLider || usuario.es_administrador_empresa),
+    is_approved: Boolean(isSuperuser || esAdminSistema || usuario.is_approved),
+    es_administrador_empresa: Boolean(
+      isSuperuser
+      || esLider
+      || (!esAdminSistema && usuario.es_administrador_empresa)
+    ),
   };
 };
 
@@ -223,6 +311,14 @@ export const esSuperusuario = (): boolean => {
 };
 
 /**
+ * Verifica si el usuario autenticado opera como ADMIN_SISTEMA (no superuser).
+ */
+export const esAdminSistema = (): boolean => {
+  const usuario = normalizarUsuarioAuth(obtenerUsuario());
+  return esAdminSistemaUsuario(usuario);
+};
+
+/**
  * Elimina la información del usuario de localStorage
  */
 export const eliminarUsuario = (): void => {
@@ -288,15 +384,24 @@ export const tienePermisoUsuario = (
   }
 
   const permisosUsuario = normalizarPermisos(usuario.permisos);
+  const permisosFrontend = permisosFrontendEstrictos(usuario);
   if (!permisoEsperado) {
     return true;
   }
 
+  const evaluarPermiso = (permiso: string): boolean => {
+    if (permiso.startsWith('frontend.')) {
+      return permisosFrontend.has(permiso);
+    }
+
+    return permisosUsuario.includes(permiso);
+  };
+
   if (Array.isArray(permisoEsperado)) {
-    return permisoEsperado.some((permiso) => permisosUsuario.includes(permiso));
+    return permisoEsperado.some((permiso) => evaluarPermiso(permiso));
   }
 
-  return permisosUsuario.includes(permisoEsperado);
+  return evaluarPermiso(permisoEsperado);
 };
 
 /**
@@ -342,27 +447,15 @@ export const esCapacitador = (): boolean => {
   return obtenerRolUsuario() === 'CAPACITADOR';
 };
 
-const RUTAS_SUPERADMIN = [
-  '/dashboard',
-  '/dashboard/usuarios',
-  '/dashboard/equipo',
-  '/dashboard/reportes',
-  '/dashboard/capacitacion',
-];
-
-const REGLAS_RUTA_DASHBOARD: Array<{
-  rutaBase: string;
-  permisos: string | string[];
-}> = [
-  { rutaBase: '/dashboard/usuarios', permisos: PERMISOS_FRONTEND.VER_USUARIOS_GLOBALES },
-  { rutaBase: '/dashboard/implementacion', permisos: PERMISOS_FRONTEND.VER_IMPLEMENTACION },
-  { rutaBase: '/dashboard/auditorias', permisos: PERMISOS_FRONTEND.VER_AUDITORIA },
-  { rutaBase: '/dashboard/auditoria/proceso', permisos: PERMISOS_FRONTEND.VER_AUDITORIA },
-  { rutaBase: '/dashboard/equipo', permisos: PERMISOS_FRONTEND.VER_EQUIPO },
-  { rutaBase: '/dashboard/reportes', permisos: PERMISOS_FRONTEND.VER_REPORTES },
-  { rutaBase: '/dashboard/capacitacion', permisos: PERMISOS_FRONTEND.VER_CAPACITACION },
-  { rutaBase: '/dashboard', permisos: PERMISOS_FRONTEND.VER_DASHBOARD },
-];
+const RUTAS_DASHBOARD_POR_PERFIL: Record<string, string[]> = {
+  SUPERADMIN: ['/dashboard', '/dashboard/usuarios', '/dashboard/equipo', '/dashboard/reportes', '/dashboard/capacitacion'],
+  ADMIN_SISTEMA: ['/dashboard', '/dashboard/usuarios', '/dashboard/equipo', '/dashboard/reportes', '/dashboard/capacitacion'],
+  LIDER_EQUIPO: ['/dashboard', '/dashboard/equipo', '/dashboard/reportes'],
+  IMPLEMENTADOR: ['/dashboard', '/dashboard/implementacion'],
+  AUDITOR: ['/dashboard', '/dashboard/auditorias', '/dashboard/auditoria/proceso'],
+  CAPACITADOR: ['/dashboard', '/dashboard/capacitacion'],
+  EMPLEADO: ['/dashboard', '/dashboard/capacitacion'],
+};
 
 const coincideRuta = (pathname: string, rutaBase: string): boolean => {
   if (rutaBase === '/dashboard') {
@@ -392,24 +485,32 @@ export const tieneAccesoRutaDashboard = (
     return false;
   }
 
+  let rutasPermitidas: string[] = [];
   if (usuario.is_superuser) {
-    return RUTAS_SUPERADMIN.some((ruta) => coincideRuta(pathname, ruta));
+    rutasPermitidas = RUTAS_DASHBOARD_POR_PERFIL.SUPERADMIN;
+  } else if (esAdminSistemaUsuario(usuario)) {
+    rutasPermitidas = RUTAS_DASHBOARD_POR_PERFIL.ADMIN_SISTEMA;
+  } else {
+    const rol = normalizarRol(String(usuario.rol || '')) || 'EMPLEADO';
+    rutasPermitidas = RUTAS_DASHBOARD_POR_PERFIL[rol] || ['/dashboard'];
   }
 
-  const reglaRuta = REGLAS_RUTA_DASHBOARD.find((regla) => coincideRuta(pathname, regla.rutaBase));
-
-  if (!reglaRuta) {
-    return false;
-  }
-
-  return tienePermisoUsuario(reglaRuta.permisos, usuario);
+  return rutasPermitidas.some((ruta) => coincideRuta(pathname, ruta));
 };
 
 /**
  * Obtiene la empresa del usuario actual
  */
 export const obtenerEmpresaUsuario = (): any | null => {
-  const usuario = obtenerUsuario();
+  const usuario = normalizarUsuarioAuth(obtenerUsuario());
+  if (!usuario) {
+    return null;
+  }
+
+  if (usuario.is_superuser || esAdminSistemaUsuario(usuario)) {
+    return null;
+  }
+
   return usuario?.empresa_info || null;
 };
 

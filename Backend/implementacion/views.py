@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from usuarios.permissions import IsApprovedUser
+from usuarios.permissions import IsApprovedUser, es_acceso_global
 from usuarios.models import Notificacion
 from .models import Empresa, ControlISO, EvaluacionControl, Evidencia
 from .serializers import (
@@ -26,8 +26,8 @@ class EmpresaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        if user.is_superuser:
-            return Empresa.objects.none()
+        if es_acceso_global(user):
+            return Empresa.objects.all().order_by('nombre')
 
         if user.empresa_id:
             return Empresa.objects.filter(id=user.empresa_id)
@@ -46,9 +46,13 @@ class ControlISOViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        if user.is_superuser:
+        if es_acceso_global(user):
+            return ControlISO.objects.all()
+
+        if not user.empresa_id:
             return ControlISO.objects.none()
 
+        # Catalogo normativo global compartido entre tenants.
         return ControlISO.objects.all()
 
 
@@ -63,8 +67,8 @@ class EvaluacionControlViewSet(viewsets.ModelViewSet):
     def _validar_empresa_usuario(self, empresa):
         user = self.request.user
 
-        if user.is_superuser:
-            raise PermissionDenied('Los superusuarios no operan datos de implementación por aislamiento multi-tenant.')
+        if es_acceso_global(user):
+            return
 
         if not user.empresa_id:
             raise PermissionDenied('Tu usuario no tiene una empresa asociada.')
@@ -109,9 +113,9 @@ class EvaluacionControlViewSet(viewsets.ModelViewSet):
         # 1. Obtener usuario de la request
         user = self.request.user
         
-        # 2. Caso 1: SuperAdmin - Sin acceso a datos de negocio
-        if user.is_superuser:
-            return EvaluacionControl.objects.none()
+        # 2. Caso 1: Acceso global
+        if es_acceso_global(user):
+            return EvaluacionControl.objects.all().select_related('empresa', 'control', 'usuario')
         
         # 3. Caso 2: Tenant aislado - Solo sus datos
         if user.empresa:
@@ -373,8 +377,8 @@ class EvidenciaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        if user.is_superuser:
-            return Evidencia.objects.none()
+        if es_acceso_global(user):
+            return Evidencia.objects.all().select_related('evaluacion')
 
         if user.empresa_id:
             return Evidencia.objects.filter(
