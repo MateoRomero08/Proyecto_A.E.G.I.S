@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Save, CheckCircle, X, Paperclip } from "lucide-react";
-import { API_URL } from "../utils/api";
+import { buildApiUrl } from "../utils/api";
 
-const EVALUACIONES_API_BASE = `${API_URL.replace(/\/$/, '')}/api/implementacion/evaluaciones`;
+const EVALUACIONES_API_BASE = buildApiUrl('/api/implementacion/evaluaciones');
 
 interface ControlCardProps {
   control: {

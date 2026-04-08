@@ -3,12 +3,12 @@
  * Utilidades para manejo de autenticación en el frontend
  */
 
-import { API_URL } from './api';
+import { buildApiUrl } from './api';
 
 // Claves de localStorage
 const TOKEN_KEY = 'token_acceso';
 const USER_KEY = 'usuario_info';
-const AUTH_API_BASE = `${API_URL.replace(/\/$/, '')}/api/usuarios`;
+const AUTH_API_BASE = buildApiUrl('/api/usuarios');
 
 export type RolUsuario = 'EMPLEADO' | 'IMPLEMENTADOR' | 'AUDITOR' | 'LIDER_EQUIPO' | 'CAPACITADOR' | 'ADMIN_SISTEMA';
 type RolUsuarioBackend = RolUsuario | 'AUDITOR_INTERNO';

@@ -19,7 +19,7 @@ import {
   Pencil
 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { API_URL, apiFetch } from "../utils/api";
+import { apiFetch, buildApiUrl } from "../utils/api";
 
 // ==================== INTERFACES ====================
 interface ProcesoAuditoria {
@@ -103,7 +103,7 @@ interface FormularioAuditoria {
   observaciones: string;
 }
 
-const BACKEND_MEDIA_ORIGIN = API_URL.replace(/\/$/, "");
+const BACKEND_MEDIA_ORIGIN = buildApiUrl();
 
 const normalizarUrlArchivo = (url?: string | null): string | null => {
   if (!url) return null;

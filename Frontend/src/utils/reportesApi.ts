@@ -1,6 +1,6 @@
-import { API_URL } from './api';
+import { buildApiUrl } from './api';
 
-const API_BASE = `${API_URL.replace(/\/$/, '')}/api/reportes`;
+const API_BASE = buildApiUrl('/api/reportes');
 
 export interface EmpresaReporte {
   id: number;

@@ -1,6 +1,6 @@
-import { API_URL } from './api';
+import { buildApiUrl } from './api';
 
-const DASHBOARD_STATS_URL = `${API_URL.replace(/\/$/, '')}/api/dashboard/stats/`;
+const DASHBOARD_STATS_URL = buildApiUrl('/api/dashboard/stats/');
 
 export type DashboardStatsScope = 'SUPERADMIN' | 'EMPRESA_ISO' | 'CAPACITACION';
 

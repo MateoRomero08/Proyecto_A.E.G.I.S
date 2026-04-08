@@ -1,7 +1,22 @@
 // src/utils/api.ts
 
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const API_BASE_URL = `${API_URL.replace(/\/$/, '')}/api`;
+const API_ORIGIN = API_URL.replace(/\/$/, '');
+
+export const buildApiUrl = (path: string = ''): string => {
+  if (!path) {
+    return API_ORIGIN;
+  }
+
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${API_ORIGIN}${normalizedPath}`;
+};
+
+const API_BASE_URL = buildApiUrl('/api');
 
 interface ApiFetchOptions extends RequestInit {
   headers?: HeadersInit;
@@ -11,6 +26,8 @@ export const apiFetch = async <T = any>(
   endpoint: string, 
   options: ApiFetchOptions = {}
 ): Promise<T> => {
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+
   // Preparar headers según el tipo de body
   const headers: Record<string, string> = {
     ...options.headers as Record<string, string>,
@@ -35,7 +52,7 @@ export const apiFetch = async <T = any>(
   };
 
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    const response = await fetch(`${API_BASE_URL}${normalizedEndpoint}`, config);
 
     // Manejar error 401 (Unauthorized - Token expirado o inválido)
     if (response.status === 401) {

@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shield, Mail, Lock, User, CheckCircle2, Building2, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { guardarToken, guardarUsuario } from '../utils/auth';
-import { API_URL } from '../utils/api';
+import { buildApiUrl } from '../utils/api';
 
-const REGISTRO_API_URL = `${API_URL.replace(/\/$/, '')}/api/usuarios/registro/`;
+const REGISTRO_API_URL = buildApiUrl('/api/usuarios/registro/');
 
 type MensajeRegistro = {
   tipo: 'error' | 'success' | 'info';
