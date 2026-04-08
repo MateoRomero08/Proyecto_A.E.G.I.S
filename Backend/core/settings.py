@@ -21,6 +21,11 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _get_env_list(var_name):
+    raw_value = os.getenv(var_name, '')
+    return [item.strip() for item in raw_value.split(',') if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
@@ -54,9 +59,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -130,9 +135,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
+CORS_ALLOWED_ORIGINS = _get_env_list('CORS_ALLOWED_ORIGINS') or [
+    'http://localhost:5173',
 ]
+
+# Temporal para habilitar conectividad inmediata en produccion.
+CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOW_CREDENTIALS = True
 
