@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shield, Mail, Lock, User, CheckCircle2, Building2, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { guardarToken, guardarUsuario } from '../utils/auth';
+import { API_URL } from '../utils/api';
+
+const REGISTRO_API_URL = `${API_URL.replace(/\/$/, '')}/api/usuarios/registro/`;
 
 type MensajeRegistro = {
   tipo: 'error' | 'success' | 'info';
@@ -75,7 +78,7 @@ export function Registro() {
       };
 
       // Hacer POST al endpoint de registro
-      const response = await fetch('http://localhost:8000/api/usuarios/registro/', {
+      const response = await fetch(REGISTRO_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

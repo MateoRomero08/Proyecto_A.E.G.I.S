@@ -3,9 +3,12 @@
  * Utilidades para manejo de autenticación en el frontend
  */
 
+import { API_URL } from './api';
+
 // Claves de localStorage
 const TOKEN_KEY = 'token_acceso';
 const USER_KEY = 'usuario_info';
+const AUTH_API_BASE = `${API_URL.replace(/\/$/, '')}/api/usuarios`;
 
 export type RolUsuario = 'EMPLEADO' | 'IMPLEMENTADOR' | 'AUDITOR' | 'LIDER_EQUIPO' | 'CAPACITADOR' | 'ADMIN_SISTEMA';
 type RolUsuarioBackend = RolUsuario | 'AUDITOR_INTERNO';
@@ -341,7 +344,7 @@ export const cerrarSesionRemota = async (): Promise<void> => {
 
   try {
     if (token) {
-      await fetch('http://localhost:8000/api/usuarios/logout/', {
+      await fetch(`${AUTH_API_BASE}/logout/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -534,7 +537,7 @@ export const redirigirALogin = (): void => {
  */
 export const iniciarSesion = async (username: string, password: string): Promise<any> => {
   try {
-    const response = await fetch('http://localhost:8000/api/usuarios/login/', {
+    const response = await fetch(`${AUTH_API_BASE}/login/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -556,7 +559,7 @@ export const iniciarSesion = async (username: string, password: string): Promise
     guardarToken(data.access);
     
     // Obtener el perfil del usuario usando el token
-    const perfilResponse = await fetch('http://localhost:8000/api/usuarios/perfil/', {
+    const perfilResponse = await fetch(`${AUTH_API_BASE}/perfil/`, {
       method: 'GET',
       headers: {
         'Authorization': 'Bearer ' + data.access,

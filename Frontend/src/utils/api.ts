@@ -1,6 +1,7 @@
 // src/utils/api.ts
 
-const BASE_URL = 'http://localhost:8000/api';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = `${API_URL.replace(/\/$/, '')}/api`;
 
 interface ApiFetchOptions extends RequestInit {
   headers?: HeadersInit;
@@ -34,7 +35,7 @@ export const apiFetch = async <T = any>(
   };
 
   try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, config);
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
 
     // Manejar error 401 (Unauthorized - Token expirado o inválido)
     if (response.status === 401) {

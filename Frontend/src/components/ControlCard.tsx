@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { Save, CheckCircle, X, Paperclip } from "lucide-react";
+import { API_URL } from "../utils/api";
+
+const EVALUACIONES_API_BASE = `${API_URL.replace(/\/$/, '')}/api/implementacion/evaluaciones`;
 
 interface ControlCardProps {
   control: {
@@ -86,8 +89,8 @@ export function ControlCard({ control, empresaId, evaluacionPrevia, onEvaluacion
 
       const esActualizacion = Boolean(evaluacionId);
       const endpoint = esActualizacion
-        ? `http://localhost:8000/api/implementacion/evaluaciones/${evaluacionId}/`
-        : 'http://localhost:8000/api/implementacion/evaluaciones/';
+        ? `${EVALUACIONES_API_BASE}/${evaluacionId}/`
+        : `${EVALUACIONES_API_BASE}/`;
 
       // Solo en creación se envían claves fijas (empresa/control).
       if (!esActualizacion) {

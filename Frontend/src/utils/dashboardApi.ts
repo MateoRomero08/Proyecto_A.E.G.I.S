@@ -1,4 +1,6 @@
-const DASHBOARD_STATS_URL = 'http://localhost:8000/api/dashboard/stats/';
+import { API_URL } from './api';
+
+const DASHBOARD_STATS_URL = `${API_URL.replace(/\/$/, '')}/api/dashboard/stats/`;
 
 export type DashboardStatsScope = 'SUPERADMIN' | 'EMPRESA_ISO' | 'CAPACITACION';
 

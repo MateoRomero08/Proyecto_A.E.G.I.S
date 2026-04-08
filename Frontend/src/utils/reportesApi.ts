@@ -1,4 +1,6 @@
-const API_BASE = 'http://localhost:8000/api/reportes';
+import { API_URL } from './api';
+
+const API_BASE = `${API_URL.replace(/\/$/, '')}/api/reportes`;
 
 export interface EmpresaReporte {
   id: number;
