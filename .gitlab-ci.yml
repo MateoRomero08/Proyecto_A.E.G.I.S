@@ -7,3 +7,4 @@ include:
 variables:
   SAST_EXCLUDED_PATHS: "spec, test, tests, tmp"
   SCAN_KUBERNETES_MANIFESTS: "false"
+  SAST_ANALYZER_IMAGE_TAG: "latest"
