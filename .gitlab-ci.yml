@@ -1,0 +1,9 @@
+stages:
+  - test
+
+include:
+  - template: Security/SAST.gitlab-ci.yml
+
+variables:
+  SAST_EXCLUDED_PATHS: "spec, test, tests, tmp"
+  SCAN_KUBERNETES_MANIFESTS: "false"
