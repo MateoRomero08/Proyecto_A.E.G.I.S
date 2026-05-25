@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -57,7 +57,10 @@ class CursoCapacitacionViewSet(viewsets.ModelViewSet):
 
         progreso_usuario_qs = ProgresoUsuario.objects.filter(usuario=user).prefetch_related('modulos_completados')
         return (
-            queryset.filter(empresa=user.empresa)
+            queryset.filter(
+                Q(empresa=user.empresa)
+                | Q(empresa__isnull=True, creado_por_admin=True)
+            )
             .distinct()
             .prefetch_related(Prefetch('progresos', queryset=progreso_usuario_qs, to_attr='progreso_usuario_actual'))
         )
@@ -145,7 +148,7 @@ class CursoCapacitacionViewSet(viewsets.ModelViewSet):
         if not user.empresa_id:
             raise PermissionDenied('Tu usuario no tiene una empresa asociada.')
 
-        if curso.empresa_id != user.empresa_id:
+        if curso.empresa_id and curso.empresa_id != user.empresa_id:
             raise PermissionDenied('No puedes reportar progreso en cursos de otra empresa.')
 
         modulo_id = request.data.get('modulo_id')
@@ -202,7 +205,10 @@ class ModuloContenidoViewSet(viewsets.ModelViewSet):
         if not user.empresa_id:
             return ModuloContenido.objects.none()
 
-        queryset = queryset.filter(curso__empresa=user.empresa).distinct()
+        queryset = queryset.filter(
+            Q(curso__empresa=user.empresa)
+            | Q(curso__empresa__isnull=True, curso__creado_por_admin=True)
+        ).distinct()
 
         if curso_id:
             queryset = queryset.filter(curso_id=curso_id)

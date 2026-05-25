@@ -3,12 +3,85 @@
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const API_ORIGIN = API_URL.replace(/\/$/, '');
 
+const normalizeOrigin = (value: string): string | null => {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+};
+
+const buildAllowedApiOrigins = (): Set<string> => {
+  const origins = new Set<string>();
+  const baseOrigin = normalizeOrigin(API_ORIGIN) ?? normalizeOrigin(API_URL);
+
+  if (baseOrigin) {
+    origins.add(baseOrigin);
+  }
+
+  const extraOriginsRaw = String(import.meta.env.VITE_API_ALLOWED_ORIGINS || '');
+  extraOriginsRaw
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .forEach((origin) => {
+      const normalized = normalizeOrigin(origin);
+      if (normalized) {
+        origins.add(normalized);
+      }
+    });
+
+  if (!baseOrigin && typeof window !== 'undefined' && window.location?.origin) {
+    origins.add(window.location.origin);
+  }
+
+  return origins;
+};
+
+const ALLOWED_API_ORIGINS = buildAllowedApiOrigins();
+
+const isAllowedApiUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    return ALLOWED_API_ORIGINS.has(parsed.origin);
+  } catch {
+    return false;
+  }
+};
+
+export const ensureApiEndpoint = (endpoint: string): string => {
+  const normalized = endpoint.trim();
+  if (!normalized) {
+    return '';
+  }
+
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(normalized) || normalized.startsWith('//')) {
+    throw new Error('Endpoint externo no permitido');
+  }
+
+  if (normalized.includes('..')) {
+    throw new Error('Endpoint no permitido');
+  }
+
+  if (normalized.startsWith('/') || normalized.startsWith('?')) {
+    return normalized;
+  }
+
+  return `/${normalized}`;
+};
+
 export const buildApiUrl = (path: string = ''): string => {
   if (!path) {
     return API_ORIGIN;
   }
 
   if (path.startsWith('http://') || path.startsWith('https://')) {
+    if (!isAllowedApiUrl(path)) {
+      throw new Error('URL no permitida para API');
+    }
     return path;
   }
 
@@ -26,7 +99,7 @@ export const apiFetch = async <T = any>(
   endpoint: string, 
   options: ApiFetchOptions = {}
 ): Promise<T> => {
-  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const normalizedEndpoint = ensureApiEndpoint(endpoint);
 
   // Preparar headers según el tipo de body
   const headers: Record<string, string> = {

@@ -10,15 +10,17 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-import os
-import dj_database_url
 from pathlib import Path
-from dotenv import load_dotenv
+import os
 
-load_dotenv()
+import dj_database_url
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(BASE_DIR.parent / '.env')
+load_dotenv(BASE_DIR / '.env')
 
 
 def _get_env_list(var_name):
@@ -26,16 +28,45 @@ def _get_env_list(var_name):
     return [item.strip() for item in raw_value.split(',') if item.strip()]
 
 
+def _get_env_bool(var_name, default='False'):
+    return os.getenv(var_name, default) == 'True'
+
+
+def _get_env_required(var_name):
+    value = os.getenv(var_name)
+    if not value:
+        raise RuntimeError(f'Missing required environment variable: {var_name}')
+    return value
+
+
+def _dedupe(values):
+    seen = set()
+    result = []
+    for value in values:
+        if value and value not in seen:
+            result.append(value)
+            seen.add(value)
+    return result
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-ymci9i^gf#hpa-%_oc@+h8xs6)s9yq0mwgb33eca1mdmja169d'
+SECRET_KEY = _get_env_required('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = _get_env_list('ALLOWED_HOSTS')
+if DEBUG:
+    ALLOWED_HOSTS.extend(['localhost', '127.0.0.1'])
+
+RENDER_EXTERNAL_HOSTNAME = os.getenv('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+ALLOWED_HOSTS = _dedupe(ALLOWED_HOSTS)
 
 
 # Application definition
@@ -135,12 +166,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = _get_env_list('CORS_ALLOWED_ORIGINS') or [
-    'http://localhost:5173',
-]
+CORS_ALLOWED_ORIGINS = _get_env_list('CORS_ALLOWED_ORIGINS')
+if DEBUG and not CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS = ['http://localhost:5173']
 
-# Temporal para habilitar conectividad inmediata en produccion.
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = _get_env_bool(
+    'CORS_ALLOW_ALL_ORIGINS',
+    'True' if DEBUG else 'False',
+)
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -164,6 +197,23 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+
+CSRF_TRUSTED_ORIGINS = _get_env_list('CSRF_TRUSTED_ORIGINS')
+if RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
+CSRF_TRUSTED_ORIGINS = _dedupe(CSRF_TRUSTED_ORIGINS)
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = _get_env_bool('USE_X_FORWARDED_HOST', 'True' if not DEBUG else 'False')
+SECURE_SSL_REDIRECT = _get_env_bool('SECURE_SSL_REDIRECT', 'True' if not DEBUG else 'False')
+SESSION_COOKIE_SECURE = _get_env_bool('SESSION_COOKIE_SECURE', 'True' if not DEBUG else 'False')
+CSRF_COOKIE_SECURE = _get_env_bool('CSRF_COOKIE_SECURE', 'True' if not DEBUG else 'False')
+SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _get_env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True' if not DEBUG else 'False')
+SECURE_HSTS_PRELOAD = _get_env_bool('SECURE_HSTS_PRELOAD', 'True' if not DEBUG else 'False')
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = os.getenv('SECURE_REFERRER_POLICY', 'same-origin')
+X_FRAME_OPTIONS = os.getenv('X_FRAME_OPTIONS', 'DENY')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
