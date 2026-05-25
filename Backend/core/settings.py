@@ -90,6 +90,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'core.middleware.ContentSecurityPolicyMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -208,12 +209,27 @@ USE_X_FORWARDED_HOST = _get_env_bool('USE_X_FORWARDED_HOST', 'True' if not DEBUG
 SECURE_SSL_REDIRECT = _get_env_bool('SECURE_SSL_REDIRECT', 'True' if not DEBUG else 'False')
 SESSION_COOKIE_SECURE = _get_env_bool('SESSION_COOKIE_SECURE', 'True' if not DEBUG else 'False')
 CSRF_COOKIE_SECURE = _get_env_bool('CSRF_COOKIE_SECURE', 'True' if not DEBUG else 'False')
+CSRF_COOKIE_HTTPONLY = _get_env_bool('CSRF_COOKIE_HTTPONLY', 'True' if not DEBUG else 'False')
 SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = _get_env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True' if not DEBUG else 'False')
 SECURE_HSTS_PRELOAD = _get_env_bool('SECURE_HSTS_PRELOAD', 'True' if not DEBUG else 'False')
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = os.getenv('SECURE_REFERRER_POLICY', 'same-origin')
 X_FRAME_OPTIONS = os.getenv('X_FRAME_OPTIONS', 'DENY')
+CONTENT_SECURITY_POLICY = os.getenv(
+    'CONTENT_SECURITY_POLICY',
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'; "
+    "object-src 'none'; "
+    "img-src 'self' data:; "
+    "font-src 'self' data:; "
+    "style-src 'self' 'unsafe-inline'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "connect-src 'self';",
+)
+CONTENT_SECURITY_POLICY_REPORT_ONLY = _get_env_bool('CONTENT_SECURITY_POLICY_REPORT_ONLY', 'False')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
