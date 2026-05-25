@@ -1,4 +1,4 @@
-import { buildApiUrl } from './api';
+import { buildApiUrl, ensureApiEndpoint } from './api';
 
 const API_BASE = buildApiUrl('/api/reportes');
 
@@ -80,7 +80,8 @@ export const descargarBlobComoArchivo = (blob: Blob, filename: string): void => 
 };
 
 const fetchPdfBlob = async (endpoint: string, fallbackFilename: string): Promise<PdfBlobPayload> => {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const safeEndpoint = ensureApiEndpoint(endpoint);
+  const response = await fetch(`${API_BASE}${safeEndpoint}`, {
     method: 'GET',
     headers: getAuthHeaders(),
   });
@@ -105,7 +106,8 @@ const buildEmpresaQuery = (empresaId?: number | null): string => {
 };
 
 const fetchJson = async <T>(endpoint: string): Promise<T> => {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const safeEndpoint = ensureApiEndpoint(endpoint);
+  const response = await fetch(`${API_BASE}${safeEndpoint}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
