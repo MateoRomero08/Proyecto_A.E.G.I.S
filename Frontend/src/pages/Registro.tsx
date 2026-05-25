@@ -35,6 +35,21 @@ export function Registro() {
     return strength;
   };
 
+  const constantTimeEqual = (left: string, right: string): boolean => {
+    // Compare values in constant time to reduce timing discrepancies.
+    const encoder = new TextEncoder();
+    const leftBytes = encoder.encode(left);
+    const rightBytes = encoder.encode(right);
+    const maxLength = Math.max(leftBytes.length, rightBytes.length);
+    let diff = leftBytes.length ^ rightBytes.length;
+
+    for (let i = 0; i < maxLength; i += 1) {
+      diff |= (leftBytes[i] ?? 0) ^ (rightBytes[i] ?? 0);
+    }
+
+    return diff === 0;
+  };
+
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPassword = e.target.value;
     setPassword(newPassword);
@@ -46,7 +61,7 @@ export function Registro() {
     setMensaje(null);
     
     // Validaciones
-    if (password !== passwordConfirm) {
+    if (!constantTimeEqual(password, passwordConfirm)) {
       setMensaje({
         tipo: 'error',
         texto: 'Las contraseñas no coinciden.'
