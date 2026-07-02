@@ -350,4 +350,4 @@ Proyecto_A.E.G.I.S/
 
 ## Licencia
 
-Este proyecto no incluye una licencia explícita en el repositorio. Si vas a publicarlo en GitHub, conviene agregar una licencia antes de abrirlo a contribuciones externas.
+El código fuente de este repositorio es público únicamente con fines de evaluación técnica y académica. Todos los derechos reservados. No se permite su reproducción, distribución, modificación o uso comercial sin autorización expresa del autor.
